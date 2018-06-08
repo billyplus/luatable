@@ -42,7 +42,15 @@ map[Config1:[map[id:1 name:name1] map[id:2 name:name2]] Config2:map[name1:map[id
 
 ## 使用方式
 
-和json包里面的Unmarshal一样
++ 安装
+
+```
+   go get github.com/billyplus/luatable
+```
+
++ 使用
+
+   和json包里面的Unmarshal一样
 
 ```
     var result interface{}
