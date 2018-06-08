@@ -45,9 +45,8 @@ map[Config1:[map[id:1 name:name1] map[id:2 name:name2]] Config2:map[name1:map[id
 和json包里面的Unmarshal一样
 
 ```
-	var result interface{}
-    var err error
-    err = luatable.Unmarshal(tc.data, &result)
+    var result interface{}
+    err := luatable.Unmarshal(tc.data, &result)
 
     if assert.NoError(err, tc.name) {
         
@@ -57,5 +56,5 @@ map[Config1:[map[id:1 name:name1] map[id:2 name:name2]] Config2:map[name1:map[id
 
 ## TODO
 
-- [x] Unmarshal
-- [ ] Marshal
+- [x] Unmarshal：将字符串转成对象
+- [ ] Marshal：将对象转成字符串
