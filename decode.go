@@ -93,7 +93,8 @@ func (d *decoder) value(v reflect.Value) {
 
 		d.array(v)
 	case tokIdent:
-		d.object(v)
+		d.error("无效的起始字符")
+		// d.object(v)
 	case tokInt:
 		if d.nextTok.Type() == tokAssign {
 			d.object(v)

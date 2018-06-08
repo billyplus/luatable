@@ -24,6 +24,7 @@ func TestDecode(t *testing.T) {
 			if assert.NoError(err, tc.name) {
 				str, err := json.Marshal(result)
 				if assert.NoError(err, tc.name) {
+					t.Logf("result is %v", result)
 					assert.Equal(tc.want, string(str), tc.name)
 				}
 			}
@@ -60,6 +61,31 @@ var (
 		want string
 		err  string
 	}{
+		{ // 简单测试
+			name: "简单测试",
+			data: `{Config1 = {
+				{
+					id=1,
+					name="name1",
+				},
+				{
+					id=2,
+					name="name2",
+				}
+			},
+			Config2 = {
+				name1 = {
+					id=1,
+					name="name1",
+				},
+				name2 = {
+					id=2,
+					name="name2",
+				}
+			}}
+`,
+			want: `{"Config1":[{"id":1,"name":"name1"},{"id":2,"name":"name2"}],"Config2":{"name1":{"id":1,"name":"name1"},"name2":{"id":2,"name":"name2"}}}`,
+		},
 		{ // 双key
 			name: "双key测试",
 			data: `{test={1001={name1={/*1001*/id=1001,name="name1",type=1,icon="icon/head1001",attack=10,life=100},name2={/*1002*/id=1001,name="name2",type=2,icon="icon/head1002",attack=11,life=101}},1003={name3={/*1003*/id=1003,name="name3",type=3,icon="icon/head1003",attack=12,life=102}},1004={name4={/*1004*/id=1004,name="name4",type=4,icon="icon/head1004",attack=13,life=103}}}}
