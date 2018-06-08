@@ -47,7 +47,7 @@ var (
 
 func TestOpenXLSXFile(t *testing.T) {
 	assert := assert.New(t)
-	xlsfile, err := excel.OpenFile("../../test.xlsx")
+	xlsfile, err := excel.OpenFile("test.xlsx")
 	assert.Nilf(err, "error opening excel:%v", err)
 
 	sname := xlsfile.GetSheetName(1)
