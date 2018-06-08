@@ -8,3 +8,8 @@ string | 字符串 | 导出时加双引号
 int | 整型 | 导出数字
 raw | 值 | 直接导出
 comment | 注释 | 跳过
+
+# TODO
+
+- [x] base格式的导出
+- [ ] tiny格式的导出

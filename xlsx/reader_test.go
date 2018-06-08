@@ -58,11 +58,11 @@ func TestOpenXLSXFile(t *testing.T) {
 	}
 }
 
-func TestXLSXReader(t *testing.T) {
+func TestBaseReader(t *testing.T) {
 	assert := assert.New(t)
 
 	for _, testcase := range tests {
-		r := New("test", testcase.data, "s", testcase.keyCount, 1, 3, 2, 4)
+		r := NewBaseReader("test", testcase.data, "s", testcase.keyCount, 1, 3, 2, 4)
 		result, err := r.ReadAll()
 		assert.Nilf(err, "error reading content:%v", err)
 		assert.Equalf(testcase.want, string(result), "%v 出错", testcase.name)

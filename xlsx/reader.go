@@ -8,7 +8,7 @@ import (
 	"github.com/billyplus/luasheet/reader"
 )
 
-type xlsxReader struct {
+type baseReader struct {
 	name        string           // name of sheet config
 	data        [][]string       // data from excel
 	filter      string           // 用来筛选字段的条件
@@ -32,11 +32,11 @@ type xlsxReader struct {
 }
 
 // stateFunc represents the state of the reader as a function that returns the next state.
-type stateFunc func(*xlsxReader) stateFunc
+type stateFunc func(*baseReader) stateFunc
 
-// New 创建一个Reader，用来读取excel 文件
-func New(name string, src [][]string, filter string, keyCount int, filterRow int, keyRow int, typeRow int, firstRow int) reader.Reader {
-	r := &xlsxReader{
+// NewBaseReader 创建一个Reader，用来读取excel 文件
+func NewBaseReader(name string, src [][]string, filter string, keyCount int, filterRow int, keyRow int, typeRow int, firstRow int) reader.Reader {
+	r := &baseReader{
 		name:      name,
 		data:      src,
 		filter:    filter,
@@ -66,7 +66,7 @@ func New(name string, src [][]string, filter string, keyCount int, filterRow int
 	return r
 }
 
-func (r *xlsxReader) ReadAll() (string, error) {
+func (r *baseReader) ReadAll() (string, error) {
 	<-r.doneChan
 	// b := []byte(r.builder.String())
 	var err error
@@ -85,27 +85,27 @@ func (r *xlsxReader) ReadAll() (string, error) {
 	return r.builder.String(), err
 }
 
-func (r *xlsxReader) run() {
+func (r *baseReader) run() {
 	for r.state = readBeginOfFile; r.state != nil; {
 		r.state = r.state(r)
 	}
 	r.done()
 }
 
-func (r *xlsxReader) done() {
+func (r *baseReader) done() {
 	r.doneChan <- true
 }
 
-func (r *xlsxReader) emit(value string) {
+func (r *baseReader) emit(value string) {
 
 	r.builder.WriteString(value)
 }
 
-func (r *xlsxReader) emitKey() {
+func (r *baseReader) emitKey() {
 	r.builder.WriteString(r.data[r.keyRow][r.col])
 }
 
-func (r *xlsxReader) emitValue() {
+func (r *baseReader) emitValue() {
 	switch r.cellTypes[r.col] {
 	case cellString:
 		r.emitString()
@@ -114,37 +114,37 @@ func (r *xlsxReader) emitValue() {
 	}
 }
 
-func (r *xlsxReader) emitString() {
+func (r *baseReader) emitString() {
 	r.builder.WriteByte('"')
 	r.builder.WriteString(r.data[r.row][r.col])
 	r.builder.WriteByte('"')
 }
 
-func (r *xlsxReader) emitRawValue() {
+func (r *baseReader) emitRawValue() {
 	r.builder.WriteString(r.data[r.row][r.col])
 }
 
-func (r *xlsxReader) emitComment() {
+func (r *baseReader) emitComment() {
 	r.builder.WriteString("/*")
 	r.builder.WriteString(r.data[r.row][r.col])
 	r.builder.WriteString("*/")
 }
 
-func (r *xlsxReader) errorf(format string, args ...interface{}) {
+func (r *baseReader) errorf(format string, args ...interface{}) {
 	r.errors = append(r.errors, fmt.Errorf(format, args...))
 }
 
-// func (r *xlsxReader)writeString(){
+// func (r *baseReader)writeString(){
 
 // }
 
-func readBeginOfFile(r *xlsxReader) stateFunc {
+func readBeginOfFile(r *baseReader) stateFunc {
 	r.emit(r.name)
 	r.emit("={")
 	return readBeginOfLine
 }
 
-func readBeginOfLine(r *xlsxReader) stateFunc {
+func readBeginOfLine(r *baseReader) stateFunc {
 
 	// fmt.Println("row is ", r.row)
 	// keycount = 0 表示是数组
@@ -193,12 +193,12 @@ func readBeginOfLine(r *xlsxReader) stateFunc {
 	return readNext
 }
 
-// func readKeys(r *xlsxReader) stateFunc {
+// func readKeys(r *baseReader) stateFunc {
 
 // 	return readBeginOfLine
 // }
 
-func readEndOfLine(r *xlsxReader) stateFunc {
+func readEndOfLine(r *baseReader) stateFunc {
 	// keycount = 0 表示是数组
 	if r.keyCount == 0 {
 		r.emit("}")
@@ -221,12 +221,12 @@ func readEndOfLine(r *xlsxReader) stateFunc {
 	return readBeginOfLine
 }
 
-func readEndOfFile(r *xlsxReader) stateFunc {
+func readEndOfFile(r *baseReader) stateFunc {
 	r.emit("}\n")
 	return nil
 }
 
-func readNext(r *xlsxReader) stateFunc {
+func readNext(r *baseReader) stateFunc {
 	// fmt.Printf("col = %v, colcount=%v\n", r.col, r.colCount)
 	switch r.cellTypes[r.col] {
 	case cellComment:
@@ -254,7 +254,7 @@ func readNext(r *xlsxReader) stateFunc {
 // 在初始化时
 // 设置标记每一列是否需要导出，这样就不需要每行都决断一次
 // 设置每列的数据类型
-func (r *xlsxReader) init() {
+func (r *baseReader) init() {
 	for i := 0; i < r.colCount; i++ {
 		// 设置导出标记，用来判断每列是否需要导出
 		if strings.Contains(r.data[r.filterRow][i], r.filter) {
