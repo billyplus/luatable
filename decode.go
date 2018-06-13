@@ -73,6 +73,9 @@ func (d *decoder) unmarshal(v interface{}) (err error) {
 	}()
 
 	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+		return errors.New("需要传入指针参数")
+	}
 	rv = d.indirect(rv)
 	d.value(rv)
 	return d.savedError
