@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-
-	"github.com/billyplus/luasheet/reader"
 )
 
-type baseReader struct {
+type BaseReader struct {
 	name        string           // name of sheet config
 	data        [][]string       // data from excel
 	filter      string           // 用来筛选字段的条件
@@ -28,15 +26,27 @@ type baseReader struct {
 	cellTypes   []cellType       // 每列的数据类型
 	errors      []error          // 用来记录产生的错误
 	state       stateFunc        // // the next lexing function to enter
+	filterFunc  FilterFunc       // 过滤器
 	wg          sync.WaitGroup
 }
 
+//FilterFunc 过滤器
+type FilterFunc func(filter string, dest string) bool
+
+func DefaultFilterFunc(filter string, dest string) bool {
+	if strings.Contains(filter, dest) {
+		return true
+	}
+	return false
+}
+
 // stateFunc represents the state of the reader as a function that returns the next state.
-type stateFunc func(*baseReader) stateFunc
+type stateFunc func(*BaseReader) stateFunc
 
 // NewBaseReader 创建一个Reader，用来读取excel 文件
-func NewBaseReader(name string, src [][]string, filter string, keyCount int, filterRow int, keyRow int, typeRow int, firstRow int) reader.Reader {
-	r := &baseReader{
+func NewBaseReader(name string, src [][]string, filter string, keyCount int,
+	filterRow int, keyRow int, typeRow int, firstRow int) *BaseReader {
+	r := &BaseReader{
 		name:      name,
 		data:      src,
 		filter:    filter,
@@ -46,10 +56,10 @@ func NewBaseReader(name string, src [][]string, filter string, keyCount int, fil
 		typeRow:   typeRow,
 	}
 	r.rowCount = len(src)
-	fmt.Println("row count is ", r.rowCount)
+	// fmt.Println("row count is ", r.rowCount)
 	r.colCount = len(src[0])
 	r.keyCount = keyCount
-	fmt.Println("key count is ", r.keyCount)
+	// fmt.Println("key count is ", r.keyCount)
 	r.filterflags = make([]bool, r.colCount)
 	r.cellTypes = make([]cellType, r.colCount)
 	r.builder = new(strings.Builder)
@@ -58,6 +68,9 @@ func NewBaseReader(name string, src [][]string, filter string, keyCount int, fil
 	r.row = firstRow
 	r.col = 0
 	r.keyNext = 0
+
+	// 使用默认的过滤器
+	r.filterFunc = DefaultFilterFunc
 	// 进行其它初始化工作
 	r.init()
 
@@ -66,7 +79,17 @@ func NewBaseReader(name string, src [][]string, filter string, keyCount int, fil
 	return r
 }
 
-func (r *baseReader) ReadAll() (string, error) {
+// SetFilterFunc 设置自定义的过滤器
+func (r *BaseReader) SetFilterFunc(filterFunc FilterFunc) {
+	r.filterFunc = filterFunc
+	for i := 0; i < r.colCount; i++ {
+		// 设置导出标记，用来判断每列是否需要导出
+		r.filterflags[i] = r.filterFunc(r.data[r.filterRow][i], r.filter)
+	}
+}
+
+// ReadAll 将excel 转为lua字符串
+func (r *BaseReader) ReadAll() (string, error) {
 	<-r.doneChan
 	// b := []byte(r.builder.String())
 	var err error
@@ -85,27 +108,27 @@ func (r *baseReader) ReadAll() (string, error) {
 	return r.builder.String(), err
 }
 
-func (r *baseReader) run() {
+func (r *BaseReader) run() {
 	for r.state = readBeginOfFile; r.state != nil; {
 		r.state = r.state(r)
 	}
 	r.done()
 }
 
-func (r *baseReader) done() {
+func (r *BaseReader) done() {
 	r.doneChan <- true
 }
 
-func (r *baseReader) emit(value string) {
+func (r *BaseReader) emit(value string) {
 
 	r.builder.WriteString(value)
 }
 
-func (r *baseReader) emitKey() {
+func (r *BaseReader) emitKey() {
 	r.builder.WriteString(r.data[r.keyRow][r.col])
 }
 
-func (r *baseReader) emitValue() {
+func (r *BaseReader) emitValue() {
 	switch r.cellTypes[r.col] {
 	case cellString:
 		r.emitString()
@@ -114,37 +137,37 @@ func (r *baseReader) emitValue() {
 	}
 }
 
-func (r *baseReader) emitString() {
+func (r *BaseReader) emitString() {
 	r.builder.WriteByte('"')
 	r.builder.WriteString(r.data[r.row][r.col])
 	r.builder.WriteByte('"')
 }
 
-func (r *baseReader) emitRawValue() {
+func (r *BaseReader) emitRawValue() {
 	r.builder.WriteString(r.data[r.row][r.col])
 }
 
-func (r *baseReader) emitComment() {
+func (r *BaseReader) emitComment() {
 	r.builder.WriteString("/*")
 	r.builder.WriteString(r.data[r.row][r.col])
 	r.builder.WriteString("*/")
 }
 
-func (r *baseReader) errorf(format string, args ...interface{}) {
+func (r *BaseReader) errorf(format string, args ...interface{}) {
 	r.errors = append(r.errors, fmt.Errorf(format, args...))
 }
 
-// func (r *baseReader)writeString(){
+// func (r *BaseReader)writeString(){
 
 // }
 
-func readBeginOfFile(r *baseReader) stateFunc {
+func readBeginOfFile(r *BaseReader) stateFunc {
 	r.emit(r.name)
 	r.emit("={")
 	return readBeginOfLine
 }
 
-func readBeginOfLine(r *baseReader) stateFunc {
+func readBeginOfLine(r *BaseReader) stateFunc {
 
 	// fmt.Println("row is ", r.row)
 	// keycount = 0 表示是数组
@@ -193,12 +216,12 @@ func readBeginOfLine(r *baseReader) stateFunc {
 	return readNext
 }
 
-// func readKeys(r *baseReader) stateFunc {
+// func readKeys(r *BaseReader) stateFunc {
 
 // 	return readBeginOfLine
 // }
 
-func readEndOfLine(r *baseReader) stateFunc {
+func readEndOfLine(r *BaseReader) stateFunc {
 	// keycount = 0 表示是数组
 	if r.keyCount == 0 {
 		r.emit("}")
@@ -221,12 +244,12 @@ func readEndOfLine(r *baseReader) stateFunc {
 	return readBeginOfLine
 }
 
-func readEndOfFile(r *baseReader) stateFunc {
+func readEndOfFile(r *BaseReader) stateFunc {
 	r.emit("}\n")
 	return nil
 }
 
-func readNext(r *baseReader) stateFunc {
+func readNext(r *BaseReader) stateFunc {
 	// fmt.Printf("col = %v, colcount=%v\n", r.col, r.colCount)
 	switch r.cellTypes[r.col] {
 	case cellComment:
@@ -254,12 +277,10 @@ func readNext(r *baseReader) stateFunc {
 // 在初始化时
 // 设置标记每一列是否需要导出，这样就不需要每行都决断一次
 // 设置每列的数据类型
-func (r *baseReader) init() {
+func (r *BaseReader) init() {
 	for i := 0; i < r.colCount; i++ {
 		// 设置导出标记，用来判断每列是否需要导出
-		if strings.Contains(r.data[r.filterRow][i], r.filter) {
-			r.filterflags[i] = true
-		}
+		r.filterflags[i] = r.filterFunc(r.data[r.filterRow][i], r.filter)
 		// 设置每列的数据类型
 		t := r.data[r.typeRow][i]
 		if ctype, ok := stringToCellType(t); ok {
