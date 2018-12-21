@@ -142,7 +142,7 @@ func (d *decoder) array(v reflect.Value) {
 func (d *decoder) object(v reflect.Value) {
 	// fmt.Println("object")
 	switch v.Kind() {
-	case reflect.Interface:
+	case reflect.Interface, reflect.Map:
 		// fmt.Println("1")
 		if v.NumMethod() == 0 {
 			// fmt.Println("2")

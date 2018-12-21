@@ -24,6 +24,7 @@ type lexer struct {
 	pos    Pos     // current position in the input
 	width  Pos     // width of last rune read from input
 	line   int
+	cur    rune       // cur rune to deal with
 	tokens chan Token // channel of scanned items
 }
 
@@ -42,19 +43,21 @@ func newLexer(name, input string) Lexer {
 	return l
 }
 
-// next returns the next rune in the input.
-func (l *lexer) next() rune {
+// next move to the next rune in the input.
+func (l *lexer) next() {
 	if int(l.pos) >= l.length {
 		l.width = 0
-		return eof
+		l.cur = eof
+		return
 	}
-	r, w := utf8.DecodeRuneInString(l.input[l.pos:])
+	var w int
+	l.cur, w = utf8.DecodeRuneInString(l.input[l.pos:])
 	l.width = Pos(w)
 	l.pos += l.width
-	if r == '\n' {
+	if l.cur == '\n' {
 		l.line++
 	}
-	return r
+	return
 }
 
 // run lexes the input by executing state functions until
@@ -96,12 +99,12 @@ func (l *lexer) NextToken() Token {
 	return tok
 }
 
-// peek returns but does not consume the next rune in the input.
-func (l *lexer) peek() rune {
-	r := l.next()
-	l.backup()
-	return r
-}
+// // peek returns but does not consume the next rune in the input.
+// func (l *lexer) peek() rune {
+// 	r := l.next()
+// 	l.backup()
+// 	return r
+// }
 
 // backup steps back one rune. Can only be called once per call of next.
 func (l *lexer) backup() {
@@ -126,24 +129,24 @@ func lexStart(l *lexer) stateFn {
 //lexAny deal with patten
 func lexAny(l *lexer) stateFn {
 	// }
-	switch r := l.next(); {
-	case isSpace(r):
+	switch l.next(); {
+	case isSpace(l.cur):
 		return lexSpace
-	case r == '{':
+	case l.cur == '{':
 		l.emit(tokLBrace)
-	case r == '}':
+	case l.cur == '}':
 		l.emit(tokRBrace)
-	case isAlphabet(r):
+	case isAlphabet(l.cur):
 		return lexIdent
-	case isDigit(r):
+	case isDigit(l.cur):
 		return lexNumber
-	case r == '=':
+	case l.cur == '=':
 		l.emit(tokAssign)
-	case r == '"':
+	case l.cur == '"':
 		return lexDoubleQuote
-	case r == '/':
+	case l.cur == '/':
 		return lexComment
-	case r == eof:
+	case l.cur == eof:
 		l.emit(tokEOF)
 		return nil
 	default:
@@ -157,9 +160,9 @@ func lexAny(l *lexer) stateFn {
 func lexNumber(l *lexer) stateFn {
 Loop:
 	for {
-		switch r := l.next(); {
-		case isDigit(r):
-		case r == '.':
+		switch l.next(); {
+		case isDigit(l.cur):
+		case l.cur == '.':
 			return lexFloat
 		default:
 			l.backup()
@@ -174,8 +177,8 @@ Loop:
 func lexFloat(l *lexer) stateFn {
 Loop:
 	for {
-		switch r := l.next(); {
-		case isDigit(r):
+		switch l.next(); {
+		case isDigit(l.cur):
 		default:
 			l.backup()
 			l.emit(tokFloat)
@@ -189,10 +192,10 @@ Loop:
 func lexIdent(l *lexer) stateFn {
 Loop:
 	for {
-		switch r := l.next(); {
+		switch l.next(); {
 		// case r == '_':
-		case isDigit(r):
-		case isAlphabet(r):
+		case isDigit(l.cur):
+		case isAlphabet(l.cur):
 		default:
 			l.backup()
 			word := l.input[l.start:l.pos]
@@ -212,9 +215,9 @@ Loop:
 func lexSingleQuote(l *lexer) stateFn {
 Loop:
 	for {
-		switch l.next() {
+		switch l.next(); l.cur {
 		case '\\':
-			if r := l.next(); r != eof && r != '\n' {
+			if l.next(); l.cur != eof && l.cur != '\n' {
 				break
 			}
 			fallthrough
@@ -233,9 +236,9 @@ Loop:
 func lexDoubleQuote(l *lexer) stateFn {
 Loop:
 	for {
-		switch l.next() {
+		switch l.next(); l.cur {
 		case '\\':
-			if r := l.next(); r != eof && r != '\n' {
+			if l.next(); l.cur != eof && l.cur != '\n' {
 				break
 			}
 			fallthrough
@@ -254,7 +257,8 @@ Loop:
 // One space has already been seen.
 func lexSpace(l *lexer) stateFn {
 	for {
-		if !isSpace(l.next()) {
+		l.next()
+		if !isSpace(l.cur) {
 			l.backup()
 			break
 		}
@@ -265,18 +269,18 @@ func lexSpace(l *lexer) stateFn {
 }
 
 func lexComment(l *lexer) stateFn {
-	switch l.next() {
+	switch l.next(); l.cur {
 	case '*':
 	Loop:
 		for {
-			switch l.next() {
+			switch l.next(); l.cur {
 			case '*':
-				r := l.next()
-				if r == '/' {
+				l.next()
+				if l.cur == '/' {
 					l.emit(tokComment)
 					break Loop
 				}
-				if r != eof {
+				if l.cur != eof {
 					continue
 				}
 				fallthrough

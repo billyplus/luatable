@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"encoding/json"
-
+	"github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,7 +33,28 @@ func TestDecode(t *testing.T) {
 
 }
 
-func BenchmarkUmarshalLua(b *testing.B) {
+func xTestDecodeStruct(t *testing.T) {
+	assert := assert.New(t)
+	var result testStruct
+	tc := tests[0]
+	var err error
+	err = Unmarshal(tc.data, &result)
+	if tc.err != "" {
+		if assert.Error(err, tc.name) {
+			assert.Equal(tc.err, err.Error(), tc.name)
+		}
+	} else {
+		if assert.NoError(err, tc.name) {
+			str, err := json.Marshal(result)
+			if assert.NoError(err, tc.name) {
+				t.Logf("result is %v", result)
+				assert.Equal(tc.want, string(str), tc.name)
+			}
+		}
+	}
+}
+
+func BenchmarkUmarshalLuaToInterface(b *testing.B) {
 	var v interface{}
 	var err error
 	src := tests[0].data
@@ -43,6 +64,39 @@ func BenchmarkUmarshalLua(b *testing.B) {
 		}
 	}
 }
+
+type testData struct {
+	ID   string
+	Name string
+}
+type testStruct struct {
+	Config1 []testData
+	Config2 map[string]testData
+}
+
+func xBenchmarkUmarshalLuaToStruct(b *testing.B) {
+	var v testStruct
+	var err error
+	src := tests[0].data
+	for i := 0; i < b.N; i++ {
+		if err = Unmarshal(src, &v); err != nil {
+			b.Error(err.Error())
+		}
+	}
+}
+
+func BenchmarkUmarshalJSONIter(b *testing.B) {
+	var v interface{}
+	var err error
+	src := []byte(tests[0].want)
+	jsondec := jsoniter.ConfigCompatibleWithStandardLibrary
+	for i := 0; i < b.N; i++ {
+		if err = jsondec.Unmarshal(src, &v); err != nil {
+			b.Error(err.Error())
+		}
+	}
+}
+
 func BenchmarkUmarshalJSON(b *testing.B) {
 	var v interface{}
 	var err error
