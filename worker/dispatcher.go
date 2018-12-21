@@ -17,7 +17,7 @@ func NewDispater(maxWorker int) *Dispatcher {
 func (d *Dispatcher) Run(jobQueue chan Job, errChan chan error) {
 	for i := 0; i < d.MaxWorker; i++ {
 		w := NewWorker(d.WorkerPool, errChan)
-		w.Run()
+		go w.Run()
 	}
 	d.dispatch(jobQueue)
 }
