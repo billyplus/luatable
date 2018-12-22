@@ -1,6 +1,7 @@
 package xlsx
 
 import (
+	"strconv"
 	"strings"
 )
 
@@ -22,7 +23,7 @@ type tinyReader struct {
 func NewTinyReader(name string, src [][]string, filter string, filterCol, keyCol, typeCol, valueCol int) Reader {
 	r := &tinyReader{
 		name:      name,
-		data:      src,
+		data:      src[1:],
 		filter:    filter,
 		filterCol: filterCol,
 		keyCol:    keyCol,
@@ -52,9 +53,7 @@ func (tiny *tinyReader) ReadAll() (string, error) {
 			// write value
 			switch row[tiny.typeCol] {
 			case cellString.ToString():
-				tiny.builder.WriteRune('"')
-				tiny.builder.WriteString(row[tiny.valueCol])
-				tiny.builder.WriteRune('"')
+				tiny.builder.WriteString(strconv.Quote(row[tiny.valueCol]))
 			default:
 				tiny.builder.WriteString(row[tiny.valueCol])
 			}

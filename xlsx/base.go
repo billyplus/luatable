@@ -2,6 +2,7 @@ package xlsx
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -128,9 +129,7 @@ func (r *baseReader) emitValue() {
 }
 
 func (r *baseReader) emitString() {
-	r.builder.WriteByte('"')
-	r.builder.WriteString(r.data[r.row][r.col])
-	r.builder.WriteByte('"')
+	r.builder.WriteString(strconv.Quote(r.data[r.row][r.col]))
 }
 
 func (r *baseReader) emitRawValue() {
