@@ -1,15 +1,15 @@
 {
-  "dataPath": "xlsx",
-  "out": [
-    {
-      "filter": "s",
-      "format": "xml",
-      "path": "./server"
-    },
-    {
-      "filter": "c",
-      "format": "json",
-      "path": "./client"
-    }
-  ]
+    "dataPath": "../xlsx",
+    "out": [
+        {
+            "filter": "s",
+            "format": "xml",
+            "path": "./server"
+        },
+        {
+            "filter": "c",
+            "format": "json",
+            "path": "./client"
+        }
+    ]
 }
