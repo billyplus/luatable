@@ -11,6 +11,8 @@ import (
 
 // EncodeXML 导出xml的配置文件
 func EncodeXML(v interface{}) ([]byte, error) {
+	doc := etree.NewDocument()
+	doc.CreateProcInst("xml", `version="1.0" encoding="utf-8"`)
 	switch reflect.TypeOf(v).Kind() {
 	case reflect.Map:
 		value := reflect.ValueOf(v)
@@ -25,32 +27,35 @@ func EncodeXML(v interface{}) ([]byte, error) {
 			if len(elem) == 0 {
 				return nil, nil
 			}
-			return encodeXMLFromArray(elem)
-		default:
-			return nil, errors.Errorf("不支持的类型:%s:%v", reflect.TypeOf(elem).Kind(), elem)
-		}
-	}
-	return nil, nil
-}
-
-func encodeXMLFromArray(v []interface{}) ([]byte, error) {
-	doc := etree.NewDocument()
-	doc.CreateProcInst("xml", `version="1.0" encoding="utf-8"`)
-	for _, value := range v {
-		switch realV := value.(type) {
+			for _, arr := range elem {
+				child, err := encodeXMLFromArray(arr)
+				if err != nil {
+					return nil, err
+				}
+				doc.AddChild(child)
+			}
 		case map[string]interface{}:
-			elem, err := encodeMap(realV)
+			child, err := encodeMap(elem)
 			if err != nil {
 				return nil, err
 			}
-			doc.AddChild(elem)
+			doc.AddChild(child)
 		default:
-			return nil, errors.Errorf("不支持的类型:%s:%v", reflect.TypeOf(realV).Kind(), realV)
-
+			return nil, errors.Errorf("不支持的类型:%s:%v\n", reflect.TypeOf(elem).Kind(), elem)
 		}
 	}
 	doc.Indent(4)
 	return doc.WriteToBytes()
+}
+
+func encodeXMLFromArray(value interface{}) (*etree.Element, error) {
+
+	switch realV := value.(type) {
+	case map[string]interface{}:
+		return encodeMap(realV)
+	default:
+		return nil, errors.Errorf("不支持的类型:%s:%v\n", reflect.TypeOf(realV).Kind(), realV)
+	}
 }
 
 func encodeMap(v map[string]interface{}) (*etree.Element, error) {
@@ -86,7 +91,7 @@ func interfaceToString(v interface{}) (string, error) {
 	case float64:
 		return strconv.FormatFloat(value, 'f', 4, 64), nil
 	default:
-		return "", errors.Errorf("不支持的类型:%s:%v", reflect.TypeOf(value).Kind(), value)
+		return "", errors.Errorf("不支持的类型:%s:%v\n", reflect.TypeOf(value).Kind(), value)
 	}
 }
 
