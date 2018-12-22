@@ -1,5 +1,6 @@
 {
     "dataPath": "../xlsx",
+    "prof": "mem",
     "out": [
         {
             "filter": "s",

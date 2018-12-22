@@ -4,15 +4,33 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	// "log"
+	"github.com/pkg/profile"
 	"os"
+	"time"
 )
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	initConfig()
+	// cobra.OnInitialize()
 	rootCmd.AddCommand(versionCmd)
 }
 
 func main() {
+	// 增加profile
+	var prof func(*profile.Profile)
+	switch config.Prof {
+	case "cpu":
+		prof = profile.CPUProfile
+	case "mem":
+		prof = profile.MemProfile
+	default:
+		prof = nil
+	}
+	if prof != nil {
+		defer profile.Start(prof, profile.ProfilePath("./prof")).Stop()
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
@@ -22,6 +40,12 @@ func main() {
 var rootCmd = &cobra.Command{
 	Use: "gencnf",
 	Run: func(cmd *cobra.Command, args []string) {
+
+		start := time.Now()
+		gen := newGenerator(20)
+		gen.GenConfig(config)
+		dur := time.Since(start)
+		fmt.Println("用时：", dur.String())
 
 	},
 }
@@ -40,5 +64,5 @@ func initConfig() {
 		os.Exit(1)
 	}
 	fmt.Printf("%+v", config)
-	fmt.Printf("loaded config from %s ", viper.ConfigFileUsed())
+	fmt.Printf("loaded config from %s \n", viper.ConfigFileUsed())
 }
