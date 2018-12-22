@@ -1,5 +1,9 @@
 package worker
 
+import (
+	"sync"
+)
+
 type Dispatcher struct {
 	WorkerPool chan chan Job
 	MaxWorker  int
@@ -14,9 +18,9 @@ func NewDispater(maxWorker int) *Dispatcher {
 	}
 }
 
-func (d *Dispatcher) Run(jobQueue chan Job, errChan chan error) {
+func (d *Dispatcher) Run(jobQueue chan Job, errChan chan error, wg *sync.WaitGroup) {
 	for i := 0; i < d.MaxWorker; i++ {
-		w := NewWorker(d.WorkerPool, errChan)
+		w := NewWorker(d.WorkerPool, errChan, wg)
 		go w.Run()
 	}
 	d.dispatch(jobQueue)
