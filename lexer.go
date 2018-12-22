@@ -150,7 +150,7 @@ func lexAny(l *lexer) stateFn {
 		l.emit(tokEOF)
 		return nil
 	default:
-		l.errorf("无效的字符")
+		l.errorf("无效的字符:%s", l.input[l.start:l.pos])
 		return nil
 	}
 	return lexAny
@@ -192,10 +192,13 @@ Loop:
 func lexIdent(l *lexer) stateFn {
 Loop:
 	for {
-		switch l.next(); {
-		// case r == '_':
-		case isDigit(l.cur):
-		case isAlphabet(l.cur):
+		l.next()
+		if isDigit(l.cur) || isAlphabet(l.cur) {
+			continue
+		}
+		switch l.cur {
+		case '_':
+		case '-':
 		default:
 			l.backup()
 			word := l.input[l.start:l.pos]
@@ -222,7 +225,7 @@ Loop:
 			}
 			fallthrough
 		case eof, '\n':
-			return l.errorf("未闭合的字符串。")
+			return l.errorf("未闭合的字符串:%s", l.input[l.start:l.pos])
 		case '\'':
 			break Loop
 		}
@@ -243,7 +246,7 @@ Loop:
 			}
 			fallthrough
 		case eof, '\n':
-			return l.errorf("未闭合的字符串。")
+			return l.errorf("未闭合的字符串:%s", l.input[l.start:l.pos])
 		case '"':
 			break Loop
 		}
