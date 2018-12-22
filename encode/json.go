@@ -5,5 +5,5 @@ import (
 )
 
 func EncodeJSON(v interface{}) ([]byte, error) {
-	return json.Marshal(v)
+	return json.MarshalIndent(v, "", "    ")
 }
