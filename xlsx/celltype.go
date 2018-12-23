@@ -16,6 +16,7 @@ const (
 	cellString
 	cellInt
 	cellFload
+	cellBool
 	cellRaw
 	end // end of defines
 )
@@ -26,6 +27,7 @@ var cells = [...]string{
 	cellString:  "string",
 	cellInt:     "int",
 	cellFload:   "float",
+	cellBool:    "bool",
 	cellRaw:     "raw",
 }
 

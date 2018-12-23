@@ -46,7 +46,7 @@ func (d *decoder) next() {
 	d.token = d.nextTok
 	d.nextTok = d.lexer.NextToken()
 	if d.token.Type() == tokError {
-		d.error("token error")
+		d.error(d.token.String())
 	}
 	// logger.Log("tok", d.token.Value())
 	// for {
@@ -253,8 +253,16 @@ func (d *decoder) literalInterface() interface{} {
 			d.error(err.Error())
 		}
 		return str
+	case tokBool:
+		fmt.Println(d.token.Value())
+		if d.token.Value() == "false" {
+			return false
+		} else if d.token.Value() == "true" {
+			return true
+		}
+		d.error("不支持的布尔值" + d.token.Value())
 	default:
-		d.error("不支持的类型")
+		d.error("不支持的类型" + d.token.String())
 	}
 	return nil
 }
