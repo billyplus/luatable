@@ -43,8 +43,8 @@ func (tiny *tinyReader) SetFilterFunc(filterFunc FilterFunc) {
 }
 
 func (tiny *tinyReader) ReadAll() (string, error) {
-	tiny.builder.WriteString(tiny.name)
-	tiny.builder.WriteString("={")
+	// tiny.builder.WriteString(tiny.name)
+	tiny.builder.WriteString("{")
 	for _, row := range tiny.data {
 		if tiny.filterFunc(row[tiny.filterCol], tiny.filter) {
 			// write key

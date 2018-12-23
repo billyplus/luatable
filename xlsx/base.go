@@ -151,8 +151,8 @@ func (r *baseReader) errorf(format string, args ...interface{}) {
 // }
 
 func readBeginOfFile(r *baseReader) stateFunc {
-	r.emit(r.name)
-	r.emit("={")
+	// r.emit(r.name)
+	r.emit("{")
 	return readBeginOfLine
 }
 
