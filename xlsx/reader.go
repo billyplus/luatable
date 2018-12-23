@@ -1,6 +1,7 @@
 package xlsx
 
 import (
+	"github.com/pkg/errors"
 	"strings"
 )
 
@@ -11,6 +12,8 @@ type Reader interface {
 
 //FilterFunc 过滤器
 type FilterFunc func(filter string, dest string) bool
+
+var ErrNoContent = errors.New("内容为空")
 
 func DefaultFilterFunc(filter string, dest string) bool {
 	if strings.Contains(filter, dest) {

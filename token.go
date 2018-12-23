@@ -114,7 +114,7 @@ func (t *luaToken) String() string {
 	case tokEOF:
 		return "EOF"
 	case tokError:
-		return "Error"
+		return "Error:" + t.val
 	}
 	return t.val
 }

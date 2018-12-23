@@ -36,7 +36,7 @@ func EncodeXML(v interface{}) ([]byte, error) {
 		}
 		doc.AddChild(child)
 	default:
-		return nil, errors.Errorf("不支持的类型:%s:%v\n", reflect.TypeOf(value).Kind(), value)
+		return nil, errors.Errorf("EncodeXML不支持的类型:%s:%v\n", reflect.TypeOf(value).Kind(), value)
 	}
 
 	doc.Indent(4)
@@ -48,7 +48,7 @@ func encodeXMLElement(value interface{}) (*etree.Element, error) {
 	case map[string]interface{}:
 		return encodeMap(realV)
 	default:
-		return nil, errors.Errorf("不支持的类型:%s:%v\n", reflect.TypeOf(realV).Kind(), realV)
+		return nil, errors.Errorf("encodeXMLElement不支持的类型:%s:%v\n", reflect.TypeOf(realV).Kind(), realV)
 	}
 }
 

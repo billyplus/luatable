@@ -1,6 +1,7 @@
 package main
 
 import (
+	// "fmt"
 	"github.com/billyplus/luatable"
 	"github.com/billyplus/luatable/encode"
 	"github.com/pkg/errors"
@@ -30,24 +31,25 @@ func (task *Task) Run() (err error) {
 			} else {
 				err = errors.Errorf("错误：%v", e)
 			}
+			err = errors.WithMessagef(err, "表%s", task.Sheet.Name)
 		}
 	}()
 
 	// 创建目录
 	if err = os.MkdirAll(task.Config.Path, 0644); err != nil {
-		return err
+		return task.error(err)
 	}
 
 	reader := readerFatory(task.Sheet, task.Config.Filter)
 	result, err := reader.ReadAll()
 	if err != nil {
-		return err
+		return task.error(err)
 	}
-
+	// fmt.Println(result)
 	var value interface{}
-	err = luatable.Unmarshal("{"+result+"}", &value)
+	err = luatable.Unmarshal(result, &value)
 	if err != nil {
-		return err
+		return task.error(err)
 	}
 	var enc encode.EncodeFunc
 	switch task.Config.Format {
@@ -61,9 +63,13 @@ func (task *Task) Run() (err error) {
 	// 编码成json或xml
 	data, err := enc(value)
 	if err != nil {
-		return err
+		return task.error(err)
 	}
 	outfile := filepath.Join(task.Config.Path, task.Sheet.Name+"."+task.Config.Format)
 	// 写入文件
 	return ioutil.WriteFile(outfile, data, 0644)
+}
+
+func (task *Task) error(err error) error {
+	return errors.Wrapf(err, "表%s", task.Sheet.Name)
 }

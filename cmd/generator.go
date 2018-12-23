@@ -46,6 +46,10 @@ func (gen *generator) handleError() {
 	for {
 		select {
 		case err := <-gen.errChan:
+			// 空文件，不处理
+			if errors.Cause(err) == xlsx.ErrNoContent {
+				continue
+			}
 			fmt.Println(err.Error())
 			if errs, ok := err.(stackTracer); ok {
 				st := errs.StackTrace()
@@ -140,7 +144,7 @@ func (gen *generator) iterateXlsx(file string) {
 		// data := xlsfile.GetRows(sh)
 		if checkValidSheet(sheet) {
 			sh := sheet.Name
-			data, err := SheetToSlice(sheet)
+			data, err := xlsx.SheetToSlice(sheet)
 			if err != nil {
 				gen.errChan <- err
 				continue

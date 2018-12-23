@@ -2,6 +2,7 @@ package xlsx
 
 import (
 	"fmt"
+	// "github.com/pkg/errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,11 +25,12 @@ type baseReader struct {
 	builder     *strings.Builder // strings.Builder for building result string
 	doneChan    chan bool        // chan for emit value
 	filterflags []bool           // 用来标记该列是否需要导出
-	cellTypes   []cellType       // 每列的数据类型
-	errors      []error          // 用来记录产生的错误
-	state       stateFunc        // // the next lexing function to enter
-	filterFunc  FilterFunc       // 过滤器
-	wg          sync.WaitGroup
+	// validCol    []int            // 用来标记需要导出的列
+	cellTypes  []cellType // 每列的数据类型
+	errors     []error    // 用来记录产生的错误
+	state      stateFunc  // // the next lexing function to enter
+	filterFunc FilterFunc // 过滤器
+	wg         sync.WaitGroup
 }
 
 // stateFunc represents the state of the reader as a function that returns the next state.
@@ -65,8 +67,6 @@ func NewBaseReader(name string, src [][]string, filter string, keyCount,
 	// 进行其它初始化工作
 	r.init()
 
-	//开始处理表格
-	go r.run()
 	return r
 }
 
@@ -79,8 +79,33 @@ func (r *baseReader) SetFilterFunc(filterFunc FilterFunc) {
 	}
 }
 
+func (r *baseReader) refleshValidCol() {
+	// r.validCol = make([]int, r.colCount)
+	// validNum := 0
+	for i := 0; i < r.colCount; i++ {
+		// 设置导出标记，用来判断每列是否需要导出
+		r.filterflags[i] = r.filterFunc(r.data[r.filterRow][i], r.filter)
+		// if r.filterFunc(r.data[r.filterRow][i], r.filter) {
+		// 	r.validCol[validNum] = i
+		// 	validNum++
+		// }
+	}
+}
+
 // ReadAll 将excel 转为lua字符串
 func (r *baseReader) ReadAll() (string, error) {
+	validcol := 0
+	for i := 0; i < r.colCount; i++ {
+		if r.filterflags[i] {
+			validcol++
+			break
+		}
+	}
+	if validcol == 0 {
+		return "", ErrNoContent
+	}
+	//开始处理表格
+	go r.run()
 	<-r.doneChan
 	// b := []byte(r.builder.String())
 	var err error
@@ -100,6 +125,14 @@ func (r *baseReader) ReadAll() (string, error) {
 }
 
 func (r *baseReader) run() {
+	defer func() {
+		e := recover()
+		if _, ok := e.(error); ok {
+			r.errorf("表%s数据第%d行(共%d行)第%d列有问题", r.name, r.row, r.rowCount, r.col)
+		}
+		r.done()
+	}()
+
 	for r.state = readBeginOfFile; r.state != nil; {
 		r.state = r.state(r)
 	}
@@ -123,13 +156,30 @@ func (r *baseReader) emitValue() {
 	switch r.cellTypes[r.col] {
 	case cellString:
 		r.emitString()
+	case cellBool:
+		r.emitBool()
 	default:
 		r.emitRawValue()
 	}
 }
 
 func (r *baseReader) emitString() {
+	if len(r.data[r.row]) <= r.col {
+		fmt.Println()
+	}
+
 	r.builder.WriteString(strconv.Quote(r.data[r.row][r.col]))
+}
+
+func (r *baseReader) emitBool() {
+	v := r.data[r.row][r.col]
+
+	switch strings.ToLower(v) {
+	case "0", "false":
+		r.builder.WriteString("false")
+	default:
+		r.builder.WriteString("true")
+	}
 }
 
 func (r *baseReader) emitRawValue() {
