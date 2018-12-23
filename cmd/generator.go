@@ -124,55 +124,58 @@ func (gen *generator) iterateXlsx(file string) {
 			gen.errChan <- err
 		}
 	}()
-
+	// 先读7行
 	xlsfile, err := excel.OpenFile(file)
 	if err != nil {
 		gen.errChan <- err
 		return
 	}
-	sheets, err := xlsfile.ToSlice()
-	if err != nil {
-		gen.errChan <- err
-		return
-	}
+	// sheets, err := xlsfile.s()
+	// if err != nil {
+	// 	gen.errChan <- err
+	// 	return
+	// }
 	// for _, sh := range xlsfile.GetSheetMap() {
-	for i := range sheets {
+	for _, sheet := range xlsfile.Sheets {
 		// data := xlsfile.GetRows(sh)
-		sh := xlsfile.Sheets[i].Name
-		data := sheets[i]
-		if checkValidSheet(data) {
-
-			sheet := &WorkSheet{
+		if checkValidSheet(sheet) {
+			sh := sheet.Name
+			data, err := SheetToSlice(sheet)
+			if err != nil {
+				gen.errChan <- err
+				continue
+			}
+			worksheet := &WorkSheet{
 				Type: data[0][1],
 				Data: data[3:],
 				Name: sh,
 				// ServerPath: data[0][3],
 				// ClientPath: data[1][3],
 			}
-			if sheet.Type == "base" {
+			if worksheet.Type == "base" {
 				count, err := strconv.ParseUint(data[1][1], 10, 64)
 				if err != nil {
 					gen.errChan <- err
 					continue
 				}
-				sheet.KeyCount = int(count)
+				worksheet.KeyCount = int(count)
 			}
-			gen.sheetChan <- sheet
+			gen.sheetChan <- worksheet
 		}
 	}
 	return
 }
 
-func checkValidSheet(data [][]string) bool {
-	rows := len(data)
-	if rows < 6 || len(data[0]) < 2 {
+func checkValidSheet(sheet *excel.Sheet) bool {
+	rows := sheet.MaxRow
+	if rows < 6 || len(sheet.Rows[0].Cells) < 2 {
 		return false
 	}
 
-	typ := data[0][1]
+	typ := sheet.Rows[0].Cells[1].Value
 	switch typ {
 	case "base":
-		if rows < 9 || len(data[1]) < 2 {
+		if rows < 9 || len(sheet.Rows[1].Cells) < 2 {
 			return false
 		}
 	case "tiny":
