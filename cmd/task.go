@@ -45,7 +45,15 @@ func (task *Task) Run() (err error) {
 	if err != nil {
 		return task.error(err)
 	}
-	// fmt.Println(result)
+	// 写lua，用于调试
+	if task.Config.GenLua {
+		// 创建目录
+		if err = os.MkdirAll("./lua", 0644); err == nil {
+			outfile := filepath.Join("./lua", task.Sheet.Name+"."+task.Config.Filter+".lua")
+			// 写入文件
+			ioutil.WriteFile(outfile, []byte(result), 0644)
+		}
+	}
 	var value interface{}
 	err = luatable.Unmarshal(result, &value)
 	if err != nil {

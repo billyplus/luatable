@@ -13,5 +13,6 @@ type Config struct {
 type ExportConfig struct {
 	Filter string
 	Format string
+	GenLua bool `mapstructure:"genlua"`
 	Path   string
 }

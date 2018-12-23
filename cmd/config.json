@@ -6,6 +6,7 @@
         {
             "filter": "s",
             "format": "xml",
+            "genLua":true,
             "path": "./server"
         },
         {
