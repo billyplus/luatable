@@ -54,6 +54,16 @@ func (tiny *tinyReader) ReadAll() (string, error) {
 			switch row[tiny.typeCol] {
 			case cellString.ToString():
 				tiny.builder.WriteString(strconv.Quote(row[tiny.valueCol]))
+			case cellBool.ToString():
+				v := row[tiny.valueCol]
+
+				switch strings.ToLower(v) {
+				case "0", "false":
+					tiny.builder.WriteString("false")
+				default:
+					tiny.builder.WriteString("true")
+				}
+
 			default:
 				tiny.builder.WriteString(row[tiny.valueCol])
 			}
