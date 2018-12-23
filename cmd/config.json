@@ -1,6 +1,7 @@
 {
     "dataPath": "../xlsx",
     "prof": "mem",
+    "skipSubDir": true,
     "out": [
         {
             "filter": "s",

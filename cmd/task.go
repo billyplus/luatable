@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/billyplus/luatable"
 	"github.com/billyplus/luatable/encode"
 	"github.com/pkg/errors"
@@ -26,7 +25,6 @@ func NewTask(sheet *WorkSheet, conf ExportConfig) *Task {
 func (task *Task) Run() (err error) {
 	defer func() { // 用defer来捕获到panic异常
 		if r := recover(); r != nil {
-			fmt.Println("from panic")
 			if e, ok := r.(error); ok {
 				err = errors.WithStack(e)
 			} else {

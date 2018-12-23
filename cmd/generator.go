@@ -74,14 +74,19 @@ func (gen *generator) GenConfig(conf Config) {
 				return nil
 			}
 			if fileinfo.IsDir() {
+				if conf.SkipSubDir && path != "." {
+					return filepath.SkipDir
+				}
 				return nil
 			}
-			filename := fileinfo.Name()
-			if filepath.Ext(filename) == ".xlsx" {
-				if strings.Contains(filename, "~$") {
+
+			// filename := fileinfo.Name()
+			if filepath.Ext(path) == ".xlsx" {
+				if strings.Contains(path, "~$") {
 					return nil
 				}
-				filename = filepath.Join(conf.DataPath, fileinfo.Name())
+				filename := filepath.Join(conf.DataPath, path)
+				fmt.Println("打开文件:", filename)
 				gen.iterateXlsx(filename)
 			}
 			return nil
@@ -102,12 +107,24 @@ func (gen *generator) iterateWorksheet(configs []ExportConfig) {
 			task := NewTask(sheet, conf)
 			gen.wg.Add(1)
 			gen.jobQueue <- task.Run
-			fmt.Printf("处理{ file: %s.%s, target: %s}\n", sheet.Name, conf.Format, conf.Filter)
+			fmt.Printf("生成 { file: %s.%s, target: %s}\n", sheet.Name, conf.Format, conf.Filter)
 		}
 	}
 }
 
 func (gen *generator) iterateXlsx(file string) {
+	defer func() { // 用defer来捕获到panic异常
+		if r := recover(); r != nil {
+			var err error
+			if e, ok := r.(error); ok {
+				err = errors.WithStack(e)
+			} else {
+				err = errors.Errorf("错误：%v", e)
+			}
+			gen.errChan <- err
+		}
+	}()
+
 	xlsfile, err := excel.OpenFile(file)
 	if err != nil {
 		gen.errChan <- err
@@ -126,11 +143,11 @@ func (gen *generator) iterateXlsx(file string) {
 		if checkValidSheet(data) {
 
 			sheet := &WorkSheet{
-				Type:       data[0][1],
-				ServerPath: data[0][3],
-				ClientPath: data[1][3],
-				Data:       data[3:],
-				Name:       sh,
+				Type: data[0][1],
+				Data: data[3:],
+				Name: sh,
+				// ServerPath: data[0][3],
+				// ClientPath: data[1][3],
 			}
 			if sheet.Type == "base" {
 				count, err := strconv.ParseUint(data[1][1], 10, 64)
@@ -147,14 +164,19 @@ func (gen *generator) iterateXlsx(file string) {
 }
 
 func checkValidSheet(data [][]string) bool {
+	rows := len(data)
+	if rows < 6 || len(data[0]) < 2 {
+		return false
+	}
+
 	typ := data[0][1]
 	switch typ {
 	case "base":
-		if len(data) < 9 {
+		if rows < 9 || len(data[1]) < 2 {
 			return false
 		}
 	case "tiny":
-		if len(data) < 6 {
+		if rows < 6 {
 			return false
 		}
 	default:

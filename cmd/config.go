@@ -2,9 +2,10 @@ package main
 
 // Config 应用全局配置
 type Config struct {
-	DataPath string         `mapstructure:"dataPath"`
-	Prof     string         `mapstructure:"prof"`
-	Out      []ExportConfig // 每个导出配置会生成一个配置文件
+	DataPath   string         `mapstructure:"dataPath"`
+	Prof       string         `mapstructure:"prof"`
+	SkipSubDir bool           `mapstructure:"skipSubDir"`
+	Out        []ExportConfig // 每个导出配置会生成一个配置文件
 
 }
 
