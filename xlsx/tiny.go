@@ -63,7 +63,7 @@ func (tiny *tinyReader) ReadAll() (string, error) {
 				v := row[tiny.valueCol]
 
 				switch strings.ToLower(v) {
-				case "0", "false":
+				case "0", "false", "":
 					tiny.builder.WriteString("false")
 				default:
 					tiny.builder.WriteString("true")

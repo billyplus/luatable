@@ -179,7 +179,7 @@ func (r *baseReader) emitBool() {
 	v := r.data[r.row][r.col]
 
 	switch strings.ToLower(v) {
-	case "0", "false":
+	case "0", "false", "":
 		r.builder.WriteString("false")
 	default:
 		r.builder.WriteString("true")
