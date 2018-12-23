@@ -254,7 +254,6 @@ func (d *decoder) literalInterface() interface{} {
 		}
 		return str
 	case tokBool:
-		fmt.Println(d.token.Value())
 		if d.token.Value() == "false" {
 			return false
 		} else if d.token.Value() == "true" {

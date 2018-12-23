@@ -158,6 +158,10 @@ func (r *baseReader) emitValue() {
 		r.emitString()
 	case cellBool:
 		r.emitBool()
+	case cellFloat:
+		r.emitFloat()
+	case cellInt:
+		r.emitInt()
 	default:
 		r.emitRawValue()
 	}
@@ -179,6 +183,24 @@ func (r *baseReader) emitBool() {
 		r.builder.WriteString("false")
 	default:
 		r.builder.WriteString("true")
+	}
+}
+
+func (r *baseReader) emitInt() {
+	v := r.data[r.row][r.col]
+	if v == "" {
+		r.builder.WriteString("0")
+	} else {
+		r.builder.WriteString(v)
+	}
+}
+
+func (r *baseReader) emitFloat() {
+	v := r.data[r.row][r.col]
+	if v == "" {
+		r.builder.WriteString("0.0")
+	} else {
+		r.builder.WriteString(v)
 	}
 }
 

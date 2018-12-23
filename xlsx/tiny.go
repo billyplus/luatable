@@ -1,6 +1,7 @@
 package xlsx
 
 import (
+	"github.com/pkg/errors"
 	"strconv"
 	"strings"
 )
@@ -45,16 +46,20 @@ func (tiny *tinyReader) SetFilterFunc(filterFunc FilterFunc) {
 func (tiny *tinyReader) ReadAll() (string, error) {
 	// tiny.builder.WriteString(tiny.name)
 	tiny.builder.WriteString("{")
-	for _, row := range tiny.data {
+	for i, row := range tiny.data {
 		if tiny.filterFunc(row[tiny.filterCol], tiny.filter) {
+			typ, ok := stringToCellType(row[tiny.typeCol])
+			if !ok {
+				return "", errors.Errorf("表%s第%d行未知的数据类型:%s", tiny.name, i, row[tiny.typeCol])
+			}
 			// write key
 			tiny.builder.WriteString(row[tiny.keyCol])
 			tiny.builder.WriteRune('=')
 			// write value
-			switch row[tiny.typeCol] {
-			case cellString.ToString():
+			switch typ {
+			case cellString:
 				tiny.builder.WriteString(strconv.Quote(row[tiny.valueCol]))
-			case cellBool.ToString():
+			case cellBool:
 				v := row[tiny.valueCol]
 
 				switch strings.ToLower(v) {
@@ -63,7 +68,20 @@ func (tiny *tinyReader) ReadAll() (string, error) {
 				default:
 					tiny.builder.WriteString("true")
 				}
-
+			case cellInt:
+				v := row[tiny.valueCol]
+				if v == "" {
+					tiny.builder.WriteString("0")
+				} else {
+					tiny.builder.WriteString(v)
+				}
+			case cellFloat:
+				v := row[tiny.valueCol]
+				if v == "" {
+					tiny.builder.WriteString("0.0")
+				} else {
+					tiny.builder.WriteString(v)
+				}
 			default:
 				tiny.builder.WriteString(row[tiny.valueCol])
 			}
