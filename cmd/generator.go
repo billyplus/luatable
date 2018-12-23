@@ -201,7 +201,7 @@ type WorkSheet struct {
 func readerFatory(sheet *WorkSheet, filter string) xlsx.Reader {
 	switch sheet.Type {
 	case "base":
-		return xlsx.NewBaseReader(sheet.Name, sheet.Data, filter, sheet.KeyCount, 1, 3, 2, 4)
+		return xlsx.NewBaseReader(sheet.Name, sheet.Data, filter, sheet.KeyCount, 1, 0, 3, 4)
 	default:
 		return xlsx.NewTinyReader(sheet.Name, sheet.Data, filter, 1, 2, 3, 4)
 	}

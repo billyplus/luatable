@@ -9,47 +9,41 @@ import (
 	"strconv"
 )
 
+var (
+	ErrNoContent = errors.New("内容为空")
+)
+
 // EncodeXML 导出xml的配置文件
 func EncodeXML(v interface{}) ([]byte, error) {
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="utf-8"`)
-	switch reflect.TypeOf(v).Kind() {
-	case reflect.Map:
-		value := reflect.ValueOf(v)
-		keys := value.MapKeys()
-		if len(keys) == 0 {
-			return nil, nil
+	switch value := v.(type) {
+	case []interface{}:
+		if len(value) == 0 {
+			return nil, ErrNoContent
 		}
-		key := keys[0]
-		iElem := value.MapIndex(key).Interface()
-		switch elem := iElem.(type) {
-		case []interface{}:
-			if len(elem) == 0 {
-				return nil, nil
-			}
-			for _, arr := range elem {
-				child, err := encodeXMLFromArray(arr)
-				if err != nil {
-					return nil, err
-				}
-				doc.AddChild(child)
-			}
-		case map[string]interface{}:
-			child, err := encodeMap(elem)
+		for _, elem := range value {
+			child, err := encodeXMLElement(elem)
 			if err != nil {
 				return nil, err
 			}
 			doc.AddChild(child)
-		default:
-			return nil, errors.Errorf("不支持的类型:%s:%v\n", reflect.TypeOf(elem).Kind(), elem)
 		}
+	case map[string]interface{}:
+		child, err := encodeMap(value)
+		if err != nil {
+			return nil, err
+		}
+		doc.AddChild(child)
+	default:
+		return nil, errors.Errorf("不支持的类型:%s:%v\n", reflect.TypeOf(value).Kind(), value)
 	}
+
 	doc.Indent(4)
 	return doc.WriteToBytes()
 }
 
-func encodeXMLFromArray(value interface{}) (*etree.Element, error) {
-
+func encodeXMLElement(value interface{}) (*etree.Element, error) {
 	switch realV := value.(type) {
 	case map[string]interface{}:
 		return encodeMap(realV)
