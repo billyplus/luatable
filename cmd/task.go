@@ -35,8 +35,36 @@ func (task *Task) Run() (err error) {
 		}
 	}()
 
+	if task.Config.Format == "ts" {
+		return task.genTS()
+	} else {
+		return task.genConfig()
+	}
+
+}
+
+func (task *Task) error(err error) error {
+	return errors.Wrapf(err, "表%s", task.Sheet.Name)
+}
+
+func (task *Task) genTS() error {
 	// 创建目录
-	if err = os.MkdirAll(task.Config.Path, 0644); err != nil {
+	if err := os.MkdirAll(task.Config.Path, 0644); err != nil {
+		return task.error(err)
+	}
+
+	data, err := GenTSFile(task.Sheet, task.Config.Filter)
+	if err != nil {
+		return task.error(err)
+	}
+	outfile := filepath.Join(task.Config.Path, task.Sheet.Name+"."+task.Config.Format)
+	// 写入文件
+	return ioutil.WriteFile(outfile, []byte(data), 0644)
+}
+
+func (task *Task) genConfig() error {
+	// 创建目录
+	if err := os.MkdirAll(task.Config.Path, 0644); err != nil {
 		return task.error(err)
 	}
 
@@ -76,8 +104,4 @@ func (task *Task) Run() (err error) {
 	outfile := filepath.Join(task.Config.Path, task.Sheet.Name+"."+task.Config.Format)
 	// 写入文件
 	return ioutil.WriteFile(outfile, data, 0644)
-}
-
-func (task *Task) error(err error) error {
-	return errors.Wrapf(err, "表%s", task.Sheet.Name)
 }

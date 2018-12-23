@@ -2,7 +2,7 @@ package xlsx
 
 import (
 	"fmt"
-	// "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -92,6 +92,10 @@ func (r *baseReader) refleshValidCol() {
 	}
 }
 
+type stackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
 // ReadAll 将excel 转为lua字符串
 func (r *baseReader) ReadAll() (string, error) {
 	validcol := 0
@@ -115,7 +119,11 @@ func (r *baseReader) ReadAll() (string, error) {
 		var errStr strings.Builder
 		for _, e := range r.errors {
 			errStr.WriteString("____")
-			errStr.WriteString(e.Error())
+			if errx, ok := e.(stackTracer); ok {
+				errStr.WriteString(fmt.Sprintf("%+v\n", errx.StackTrace()))
+			} else {
+				errStr.WriteString(e.Error())
+			}
 			errStr.WriteByte('\n')
 		}
 		err = fmt.Errorf(errStr.String())
@@ -127,8 +135,9 @@ func (r *baseReader) ReadAll() (string, error) {
 func (r *baseReader) run() {
 	defer func() {
 		e := recover()
-		if _, ok := e.(error); ok {
+		if err, ok := e.(error); ok {
 			r.errorf("表%s数据第%d行(共%d行)第%d列有问题", r.name, r.row, r.rowCount, r.col)
+			r.errors = append(r.errors, errors.WithStack(err))
 		}
 		r.done()
 	}()
@@ -191,7 +200,18 @@ func (r *baseReader) emitInt() {
 	if v == "" {
 		r.builder.WriteString("0")
 	} else {
-		r.builder.WriteString(v)
+		// 尝试int64
+		val, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			// 尝试float64
+			fval, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				// 不是数字
+				r.errorf("第%d行%d列数值不是数字", r.row, r.col)
+			}
+			val = int64(fval)
+		}
+		r.builder.WriteString(strconv.FormatInt(val, 10))
 	}
 }
 
@@ -229,7 +249,17 @@ func readBeginOfFile(r *baseReader) stateFunc {
 }
 
 func readBeginOfLine(r *baseReader) stateFunc {
-
+	// 跳过首单元格为空的行
+	for {
+		if r.row >= r.rowCount {
+			return readEndOfFile
+		}
+		if len(r.data[r.row]) == 0 || r.data[r.row][0] == "" {
+			r.row++
+			continue
+		}
+		break
+	}
 	// fmt.Println("row is ", r.row)
 	// keycount = 0 表示是数组
 	if r.keyCount == 0 {

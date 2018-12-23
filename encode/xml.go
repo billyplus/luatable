@@ -56,7 +56,7 @@ func encodeMap(v map[string]interface{}) (*etree.Element, error) {
 	elem := etree.NewElement("i")
 	// keys := reflect.ValueOf(v).MapKeys()
 	var err error
-	sortedMapString(v, func(k string, value interface{}) {
+	SortedMapIterate(v, func(k string, value interface{}) {
 		str, err2 := interfaceToString(value)
 		if err2 != nil {
 			err = err2
@@ -89,7 +89,7 @@ func interfaceToString(v interface{}) (string, error) {
 	}
 }
 
-func sortedMapString(m map[string]interface{}, f func(string, interface{})) {
+func SortedMapIterate(m map[string]interface{}, f func(string, interface{})) {
 	var keys []string
 	for k := range m {
 		keys = append(keys, k)
