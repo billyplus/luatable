@@ -17,6 +17,7 @@ var (
 func EncodeXML(v interface{}) ([]byte, error) {
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="utf-8"`)
+	root := doc.CreateElement("root")
 	switch value := v.(type) {
 	case []interface{}:
 		if len(value) == 0 {
@@ -27,14 +28,14 @@ func EncodeXML(v interface{}) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			doc.AddChild(child)
+			root.AddChild(child)
 		}
 	case map[string]interface{}:
 		child, err := encodeMap(value)
 		if err != nil {
 			return nil, err
 		}
-		doc.AddChild(child)
+		root.AddChild(child)
 	default:
 		return nil, errors.Errorf("EncodeXML不支持的类型:%s:%v\n", reflect.TypeOf(value).Kind(), value)
 	}
