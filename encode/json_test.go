@@ -55,6 +55,7 @@ var jsontests = []struct {
         "name": "名字4",
         "type": 4
     }
-]`,
+]
+`,
 	},
 }
