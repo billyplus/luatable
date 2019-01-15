@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	excel "github.com/tealeg/xlsx"
-	// excel "github.com/360EntSecGroup-Skylar/excelize"
+	excel360 "github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/billyplus/luatable/worker"
 	"github.com/billyplus/luatable/xlsx"
+	"github.com/pkg/errors"
+	excel "github.com/tealeg/xlsx"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,6 +18,7 @@ import (
 type generator struct {
 	wg         *sync.WaitGroup
 	dispatcher *worker.Dispatcher
+	config     *Config
 	jobQueue   chan worker.Job
 	errChan    chan error
 	sheetChan  chan *WorkSheet
@@ -70,6 +71,7 @@ func (gen *generator) stop() {
 }
 
 func (gen *generator) GenConfig(conf Config) {
+	gen.config = &conf
 	go gen.iterateWorksheet(conf.Out)
 
 	func(sheetChan chan *WorkSheet, errChan chan error) {
@@ -128,20 +130,21 @@ func (gen *generator) iterateXlsx(file string) {
 			gen.errChan <- err
 		}
 	}()
-	// 先读7行
+	if gen.config.Use360 {
+		gen.sheetsFromExcel360(file)
+	} else {
+		gen.sheetsFromXlsx(file)
+	}
+}
+
+func (gen *generator) sheetsFromXlsx(file string) {
 	xlsfile, err := excel.OpenFile(file)
 	if err != nil {
 		gen.errChan <- err
 		return
 	}
-	// sheets, err := xlsfile.s()
-	// if err != nil {
-	// 	gen.errChan <- err
-	// 	return
-	// }
-	// for _, sh := range xlsfile.GetSheetMap() {
+
 	for _, sheet := range xlsfile.Sheets {
-		// data := xlsfile.GetRows(sh)
 		if checkValidSheet(sheet) {
 			sh := sheet.Name
 			data, err := xlsx.SheetToSlice(sheet)
@@ -167,7 +170,63 @@ func (gen *generator) iterateXlsx(file string) {
 			gen.sheetChan <- worksheet
 		}
 	}
-	return
+}
+
+func (gen *generator) sheetsFromExcel360(file string) {
+	xlsfile, err := excel360.OpenFile(file)
+	if err != nil {
+		gen.errChan <- err
+		return
+	}
+
+	// for index := range xlsfile.SheetCount {
+	for i := 0; i < xlsfile.SheetCount; i++ {
+		sh := xlsfile.GetSheetName(i)
+
+		data := xlsfile.GetRows(sh)
+		// data := xlsfile.GetRows(sh)
+		// sheet := xlsfile.
+		if checkValid360Sheet(data) {
+			worksheet := &WorkSheet{
+				Type: data[0][1],
+				Data: data[3:],
+				Name: sh,
+				// ServerPath: data[0][3],
+				// ClientPath: data[1][3],
+			}
+			if worksheet.Type == "base" {
+				count, err := strconv.ParseUint(data[1][1], 10, 64)
+				if err != nil {
+					gen.errChan <- err
+					continue
+				}
+				worksheet.KeyCount = int(count)
+			}
+			gen.sheetChan <- worksheet
+		}
+	}
+}
+
+func checkValid360Sheet(data [][]string) bool {
+	rows := len(data)
+	if rows < 6 || len(data[0]) < 2 {
+		return false
+	}
+
+	typ := data[0][1]
+	switch typ {
+	case "base":
+		if rows < 9 || len(data[1]) < 2 {
+			return false
+		}
+	case "tiny":
+		if rows < 6 {
+			return false
+		}
+	default:
+		return false
+	}
+	return true
 }
 
 func checkValidSheet(sheet *excel.Sheet) bool {
