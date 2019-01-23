@@ -379,7 +379,9 @@ func (r *baseReader) init() {
 		if ctype, ok := stringToCellType(t); ok {
 			r.cellTypes[i] = ctype
 		} else {
-			r.cellTypes[i] = cellInvalid
+			if r.filterflags[i] {
+				panic(errors.Errorf("字段类型不正确 表:%s 列:%d", r.name, i))
+			}
 		}
 	}
 }

@@ -23,6 +23,7 @@ type generator struct {
 	errChan    chan error
 	sheetChan  chan *WorkSheet
 	quit       chan bool
+	errors     []error
 }
 
 func newGenerator(maxworker int) *generator {
@@ -51,14 +52,8 @@ func (gen *generator) handleError() {
 			if errors.Cause(err) == xlsx.ErrNoContent {
 				continue
 			}
-			fmt.Println(err.Error())
-			if errs, ok := err.(stackTracer); ok {
-				st := errs.StackTrace()
-				fmt.Printf("%+v\n", st) // top two frames
-				// for _, f := range err.StackTrace() {
-				// 		fmt.Printf("%+s:%d", f)
-				// }
-			}
+			gen.errors = append(gen.errors, err)
+
 		case <-gen.quit:
 			break
 		}
@@ -66,7 +61,29 @@ func (gen *generator) handleError() {
 
 }
 
-func (gen *generator) stop() {
+func (gen *generator) Close() {
+	if gen.quit != nil {
+		close(gen.quit)
+		gen.quit = nil
+	}
+}
+
+func (gen *generator) PrintErrors() {
+	fmt.Printf("一共有 %d 个错误", len(gen.errors))
+	fmt.Println("-------------------------------------------")
+	fmt.Println("")
+	for _, err := range gen.errors {
+		fmt.Println(err.Error())
+		if errs, ok := err.(stackTracer); ok {
+			st := errs.StackTrace()
+			fmt.Printf("%+v\n", st) // top two frames
+			// for _, f := range err.StackTrace() {
+			// 		fmt.Printf("%+s:%d", f)
+			// }
+		}
+	}
+	fmt.Println("")
+	fmt.Println("-------------------------------------------")
 
 }
 

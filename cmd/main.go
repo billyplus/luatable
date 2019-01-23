@@ -44,7 +44,9 @@ var rootCmd = &cobra.Command{
 		start := time.Now()
 		gen := newGenerator(20)
 		gen.GenConfig(config)
+		gen.Close()
 		dur := time.Since(start)
+		gen.PrintErrors()
 		fmt.Println("用时：", dur.String())
 
 	},
