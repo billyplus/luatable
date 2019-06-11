@@ -129,27 +129,41 @@ func lexStart(l *lexer) stateFn {
 //lexAny deal with patten
 func lexAny(l *lexer) stateFn {
 	// }
-	switch l.next(); {
-	case isSpace(l.cur):
-		return lexSpace
-	case l.cur == '{':
+	l.next()
+	switch l.cur {
+	// case isSpace(l.cur):
+	// 	return lexSpace
+	case '{':
 		l.emit(tokLBrace)
-	case l.cur == '}':
+	case '}':
 		l.emit(tokRBrace)
-	case isAlphabet(l.cur):
-		return lexIdent
-	case isDigit(l.cur):
-		return lexNumber
-	case l.cur == '=':
+	// case '[':
+		// l.emit(tokLBracket)
+	// case ']':
+		// l.emit(tokRBracket)
+	// case isAlphabet(l.cur):
+	// 	return lexIdent
+	// case isDigit(l.cur):
+	// 	return lexNumber
+	case '=':
 		l.emit(tokAssign)
-	case l.cur == '"':
+	case '"':
 		return lexDoubleQuote
-	case l.cur == '/':
+	case '/':
 		return lexComment
-	case l.cur == eof:
+	case eof:
 		l.emit(tokEOF)
 		return nil
 	default:
+		if isSpace(l.cur) {
+			return lexSpace
+		}
+		if isAlphabet(l.cur) {
+			return lexIdent
+		}
+		if isDigit(l.cur) {
+			return lexNumber
+		}
 		l.errorf("无效的字符:%s", l.input[l.start:l.pos])
 		return nil
 	}
@@ -298,7 +312,7 @@ func lexComment(l *lexer) stateFn {
 // isSpace reports whether r is a space character.
 // space include \t \n \r ,
 func isSpace(r rune) bool {
-	return r == ' ' || r == '\t' || r == '\n' || r == ','
+	return r == ' ' || r == '\t' || r == '\n' || r == ',' || r== '[' || r== ']'
 }
 
 // isAlphabet reports whether r is a alphabet character

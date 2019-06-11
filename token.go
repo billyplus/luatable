@@ -30,12 +30,14 @@ const (
 	tokBool
 	tokLiteralEnd
 	tokOperatorBegin
-	tokAssign // =
-	tokLBrace // {
-	tokRBrace // }
-	tokComma  // ,
-	tokPeriod // .
-	tokColon  // :
+	tokAssign   // =
+	tokLBrace   // {
+	tokRBrace   // }
+	tokLBracket // [
+	tokRBracket // ]
+	tokComma    // ,
+	tokPeriod   // .
+	tokColon    // :
 	tokOperatorEnd
 	// BOL // Begin of list
 	// EOL // End of list
@@ -44,20 +46,22 @@ const (
 
 // tokList
 var tokList = [...]string{
-	tokEOF:     "eof",
-	tokError:   "error",
-	tokComment: "comment",
-	tokIdent:   "ident",
-	tokInt:     "int",
-	tokFloat:   "float",
-	tokString:  "string",
-	tokBool:    "bool",
-	tokAssign:  "=",
-	tokLBrace:  "{",
-	tokRBrace:  "}",
-	tokComma:   ",",
-	tokPeriod:  ".",
-	tokColon:   ":",
+	tokEOF:      "eof",
+	tokError:    "error",
+	tokComment:  "comment",
+	tokIdent:    "ident",
+	tokInt:      "int",
+	tokFloat:    "float",
+	tokString:   "string",
+	tokBool:     "bool",
+	tokAssign:   "=",
+	tokLBrace:   "{",
+	tokRBrace:   "}",
+	tokLBracket: "[",
+	tokRBracket: "]",
+	tokComma:    ",",
+	tokPeriod:   ".",
+	tokColon:    ":",
 }
 
 // tokMap 是string和token的映射
