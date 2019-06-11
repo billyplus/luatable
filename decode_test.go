@@ -164,6 +164,12 @@ var (
 `,
 			want: `{"test":{"1001":{"attack":10,"icon":"icon/head1001","id":1001,"life":100,"name":"name1","type":1},"1002":{"attack":11,"icon":"icon/head1002","id":1002,"life":101,"name":"name2","type":2},"1003":{"attack":12,"icon":"icon/head1003","id":1003,"life":102,"name":"name3","type":3},"1004":{"attack":13,"icon":"icon/head1004","id":1004,"life":103,"name":"name4","type":4}}}`,
 		},
+		{ // 单key
+			name: "数字为key测试",
+			data: `{[222]={[1001]={/*1001*/id=1001,name="name1",type=1,icon="icon/head1001",attack=10,life=100},[1002]={/*1002*/id=1002,name="name2",type=2,icon="icon/head1002",attack=11,life=101},[1003]={/*1003*/id=1003,name="name3",type=3,icon="icon/head1003",attack=12,life=102},[1004]={/*1004*/id=1004,name="name4",type=4,icon="icon/head1004",attack=13,life=103}}}
+`,
+			want: `{"222":{"1001":{"attack":10,"icon":"icon/head1001","id":1001,"life":100,"name":"name1","type":1},"1002":{"attack":11,"icon":"icon/head1002","id":1002,"life":101,"name":"name2","type":2},"1003":{"attack":12,"icon":"icon/head1003","id":1003,"life":102,"name":"name3","type":3},"1004":{"attack":13,"icon":"icon/head1004","id":1004,"life":103,"name":"name4","type":4}}}`,
+		},
 		{ // 数组
 			name: "数组测试",
 			data: `{test={{/*1001*/id=1001,name="name1",type=1,icon="icon/head1001",attack=10,life=100},{/*1002*/id=1001,name="name2",type=2,icon="icon/head1002",attack=11,life=101},{/*1003*/id=1003,name="name3",type=3,icon="icon/head1003",attack=12,life=102},{/*1004*/id=1004,name="name4",type=4,icon="icon/head1004",attack=13,life=103}}}
