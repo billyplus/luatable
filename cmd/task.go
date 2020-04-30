@@ -2,12 +2,13 @@ package main
 
 import (
 	// "fmt"
-	"github.com/billyplus/luatable"
-	"github.com/billyplus/luatable/encode"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/billyplus/luatable"
+	"github.com/billyplus/luatable/encode"
+	"github.com/pkg/errors"
 )
 
 type Task struct {
@@ -87,12 +88,21 @@ func (task *Task) genConfig() error {
 	if err != nil {
 		return task.error(err)
 	}
+	outfile := filepath.Join(task.Config.Path, task.Sheet.Name+"."+task.Config.Format)
+
 	var enc encode.EncodeFunc
 	switch task.Config.Format {
 	case "xml":
 		enc = encode.EncodeXML
 	case "json":
 		enc = encode.EncodeJSON
+	case "lua":
+		{
+			if err = ioutil.WriteFile(outfile, []byte(result), 0644); err != nil {
+				return task.error(err)
+			}
+			return nil
+		}
 	default:
 		return errors.Errorf("不支持的格式类型{out.format}=%s", task.Config.Format)
 	}
@@ -101,7 +111,9 @@ func (task *Task) genConfig() error {
 	if err != nil {
 		return task.error(err)
 	}
-	outfile := filepath.Join(task.Config.Path, task.Sheet.Name+"."+task.Config.Format)
 	// 写入文件
-	return ioutil.WriteFile(outfile, data, 0644)
+	if err = ioutil.WriteFile(outfile, data, 0644); err != nil {
+		return task.error(err)
+	}
+	return nil
 }

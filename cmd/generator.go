@@ -1,18 +1,24 @@
 package main
 
 import (
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	excel360 "github.com/360EntSecGroup-Skylar/excelize"
-	"github.com/billyplus/luatable/worker"
-	"github.com/billyplus/luatable/xlsx"
-	"github.com/pkg/errors"
-	excel "github.com/tealeg/xlsx"
+	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	excel360 "github.com/360EntSecGroup-Skylar/excelize"
+	"github.com/billyplus/luatable/worker"
+	"github.com/billyplus/luatable/xlsx"
+	"github.com/pkg/errors"
+	excel "github.com/tealeg/xlsx"
 )
 
 type generator struct {
@@ -90,27 +96,55 @@ func (gen *generator) PrintErrors() {
 func (gen *generator) GenConfig(conf Config) {
 	gen.config = &conf
 	go gen.iterateWorksheet(conf.Out)
+	fmt.Println("handle path:", conf.DataPath)
 
 	func(sheetChan chan *WorkSheet, errChan chan error) {
+		md5list := make(map[string]string)
+		data, err := ioutil.ReadFile(conf.MD5File)
+		if err != nil {
+			return
+		}
+		if err := json.Unmarshal(data, &md5list); err != nil {
+			return
+		}
 		filepath.Walk(conf.DataPath, func(path string, fileinfo os.FileInfo, err error) error {
+			fmt.Println("handle path:", path)
 			if err != nil {
+				fmt.Println("handle path:", err.Error())
 				return nil
 			}
+			fmt.Println("1 handle path:", path)
 			if fileinfo.IsDir() {
-				if conf.SkipSubDir && path != "." {
+				if conf.SkipSubDir && path != conf.DataPath {
+					fmt.Println("skip handle path:", path)
 					return filepath.SkipDir
 				}
 				return nil
 			}
 
-			// filename := fileinfo.Name()
-			if filepath.Ext(path) == ".xlsx" {
-				if strings.Contains(path, "~$") {
+			filename := fileinfo.Name()
+			fpath := ""
+			if filepath.Ext(filename) == ".xlsx" {
+				if strings.HasPrefix(filename, "~$") || strings.HasPrefix(filename, ".~") {
 					return nil
 				}
-				filename := filepath.Join(conf.DataPath, path)
-				fmt.Println("打开文件:", filename)
-				gen.iterateXlsx(filename)
+				fpath = filepath.Join(conf.DataPath, filename)
+				//check hash
+				checksum, err := md5Hash(fpath)
+				if err != nil {
+					return nil
+				}
+				md5str, ok := md5list[filename]
+				if ok && checksum == md5str {
+					fmt.Println("skip file:", filename)
+					return nil
+				}
+				md5list[filename] = checksum
+				if err = saveMd5Hash(md5list, conf.MD5File); err != nil {
+					return err
+				}
+				fmt.Println("handle file:", filename)
+				gen.iterateXlsx(fpath)
 			}
 			return nil
 		})
@@ -121,6 +155,42 @@ func (gen *generator) GenConfig(conf Config) {
 	gen.wg.Wait()
 	time.Sleep(500 * time.Microsecond)
 	return
+}
+
+func saveMd5Hash(md5list map[string]string, path string) error {
+	data, err := json.MarshalIndent(md5list, "", "    ")
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(path, data, 0644)
+}
+
+func md5Hash(filepath string) (string, error) {
+	//Initialize variable returnMD5String now in case an error has to be returned
+	var returnMD5String string
+
+	//Open the passed argument and check for any error
+	file, err := os.Open(filepath)
+	if err != nil {
+		return returnMD5String, err
+	}
+
+	//Tell the program to call the following function when the current function returns
+	defer file.Close()
+
+	//Open a new hash interface to write to
+	hash := md5.New()
+
+	//Copy the file in the hash interface and check for any error
+	if _, err := io.Copy(hash, file); err != nil {
+		return returnMD5String, err
+	}
+
+	//Get the 16 bytes hash
+	hashInBytes := hash.Sum(nil)[:16]
+
+	//Convert the bytes to a string
+	return hex.EncodeToString(hashInBytes), nil
 }
 
 func (gen *generator) iterateWorksheet(configs []ExportConfig) {
@@ -170,14 +240,13 @@ func (gen *generator) sheetsFromXlsx(file string) {
 				continue
 			}
 			worksheet := &WorkSheet{
-				Type: data[0][1],
-				Data: data[3:],
-				Name: sh,
-				// ServerPath: data[0][3],
-				// ClientPath: data[1][3],
+				Type:       data[0][1],
+				Data:       data[4:],
+				Name:       sh,
+				ServerPath: data[1][1],
 			}
 			if worksheet.Type == "base" {
-				count, err := strconv.ParseUint(data[1][1], 10, 64)
+				count, err := strconv.ParseUint(data[2][1], 10, 64)
 				if err != nil {
 					gen.errChan <- err
 					continue
@@ -206,13 +275,13 @@ func (gen *generator) sheetsFromExcel360(file string) {
 		if checkValid360Sheet(data) {
 			worksheet := &WorkSheet{
 				Type: data[0][1],
-				Data: data[3:],
+				Data: data[5:],
 				Name: sh,
 				// ServerPath: data[0][3],
 				// ClientPath: data[1][3],
 			}
 			if worksheet.Type == "base" {
-				count, err := strconv.ParseUint(data[1][1], 10, 64)
+				count, err := strconv.ParseUint(data[2][1], 10, 64)
 				if err != nil {
 					gen.errChan <- err
 					continue
@@ -281,7 +350,7 @@ type WorkSheet struct {
 func readerFatory(sheet *WorkSheet, filter string) xlsx.Reader {
 	switch sheet.Type {
 	case "base":
-		return xlsx.NewBaseReader(sheet.Name, sheet.Data, filter, sheet.KeyCount, 1, 0, 3, 4)
+		return xlsx.NewBaseReader(sheet.Name, sheet.Data, filter, sheet.KeyCount, 1, 2, 3, 4)
 	default:
 		return xlsx.NewTinyReader(sheet.Name, sheet.Data, filter, 1, 2, 3, 4)
 	}

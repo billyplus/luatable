@@ -2,17 +2,12 @@
     "dataPath": "../xlsx",
     "prof": "mem",
     "skipSubDir": true,
+    "md5": "./md5/sMd5Dic.json",
     "out": [
         {
             "filter": "s",
-            "format": "xml",
-            "genLua":true,
-            "path": "./server"
-        },
-        {
-            "filter": "c",
-            "format": "json",
-            "path": "./client"
+            "format": "lua",
+            "path": "../Server/bin/GameWorld/data/config"
         }
     ]
 }

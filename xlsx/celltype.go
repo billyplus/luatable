@@ -28,7 +28,7 @@ var cells = [...]string{
 	cellInt:     "int",
 	cellFloat:   "float",
 	cellBool:    "bool",
-	cellRaw:     "raw",
+	cellRaw:     "table",
 }
 
 var cellsMap map[string]cellType
