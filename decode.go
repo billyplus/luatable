@@ -20,45 +20,39 @@ func init() {
 }
 
 // Unmarshal 将字符串解析成对象、数组、或变量
-func Unmarshal(data string, v interface{}) error {
+func Unmarshal(data []byte, v interface{}) error {
 	var d decoder
 	d.init(data)
 	return d.unmarshal(v)
 }
 
 type decoder struct {
-	lexer   Lexer
-	token   Token
-	nextTok Token
-	peek    bool
+	// lexer   Lexer
+	scanner scanner
+
+	src   []byte
+	token tokType
+	pos   Pos
+	val   string
+	// peek    bool
 	// thirdTok   tokToken
 	savedError error
 }
 
-func (d *decoder) init(data string) {
-	d.lexer = newLexer("lexer", data)
-	d.nextTok = d.lexer.NextToken()
+func (d *decoder) init(data []byte) {
+	d.scanner.Init(data)
+	d.src = data
+	// d.lexer = newLexer("lexer", data)
+	// d.nextTok = d.lexer.NextToken()
 	// d.thirdTok = d.lexer.NextToken()
 	d.next()
 }
 
 func (d *decoder) next() {
-	d.token = d.nextTok
-	d.nextTok = d.lexer.NextToken()
-	if d.token.Type() == tokError {
-		d.error(d.token.String())
+	d.pos, d.token, d.val = d.scanner.Scan()
+	if d.token == tokError {
+		d.error("无效字符")
 	}
-	// logger.Log("tok", d.token.Value())
-	// for {
-	// 	tok := d.lexer.NextToken()
-	// 	if d.token.Type() == tokEOF || d.token.Type() == tokError || d.token.Type() != tokComment {
-	// 		break
-	// 	}
-	// 	d.token = d.nextTok
-	// 	d.nextTok = d.thirdTok
-	// 	d.thirdTok = tok
-	// }
-	// d.next()
 }
 
 func (d *decoder) unmarshal(v interface{}) (err error) {
@@ -82,29 +76,29 @@ func (d *decoder) unmarshal(v interface{}) (err error) {
 }
 
 func (d *decoder) value(v reflect.Value) {
-
-	switch d.token.Type() {
+	tok := d.token
+	switch tok {
 	case tokLBrace:
 		d.next()
-		if d.token.Type() == tokIdent {
+		if d.token == tokLBracket || d.token == tokIdent {
 			d.object(v)
-			break
-		} else if d.token.Type() == tokInt || d.nextTok.Type() == tokAssign {
-			d.object(v)
-			break
+		} else if d.token == tokLBrace || d.token.IsLiteral() {
+			// fmt.Println(d.token.ToString(), d.val)
+			// is array
+			d.array(v)
 		}
 
-		d.array(v)
-	case tokIdent:
-		d.error("无效的起始字符")
-		// d.object(v)
-	case tokInt:
-		if d.nextTok.Type() == tokAssign {
-			d.object(v)
-		}
-		fallthrough
+	// case tokIdent:
+	// 	d.error("无效的起始字符")
+	// 	// d.object(v)
+	// case tokInt:
+	// 	if d.nextTok == tokAssign {
+	// 		d.object(v)
+	// 	}
+	// 	fallthrough
 	default:
-		d.literal(v)
+		d.error("无效的起始字符")
+		// d.literal(v)
 	}
 }
 
@@ -128,12 +122,13 @@ func (d *decoder) indirect(v reflect.Value) reflect.Value {
 }
 
 func (d *decoder) array(v reflect.Value) {
+	// fmt.Println("is array", d.token.ToString(), d.val)
 	switch v.Kind() {
-	case reflect.Interface:
-		if v.NumMethod() == 0 {
-			//没有初始化的interface{}
-			v.Set(reflect.ValueOf(d.arrayInterface()))
-		}
+	case reflect.Interface, reflect.Slice:
+		v.Set(reflect.ValueOf(d.arrayInterface()))
+		// if v.NumMethod() == 0 {
+		// 	//没有初始化的interface{}
+		// }
 	}
 	d.atEOF()
 
@@ -144,63 +139,60 @@ func (d *decoder) object(v reflect.Value) {
 	switch v.Kind() {
 	case reflect.Interface, reflect.Map:
 		// fmt.Println("1")
-		if v.NumMethod() == 0 {
-			// fmt.Println("2")
-			//没有初始化的interface{}
-			v.Set(reflect.ValueOf(d.objectInterface()))
-			// fmt.Println("object:v type is ", v.Type().String())
-		}
+		v.Set(reflect.ValueOf(d.objectInterface()))
+		// if v.NumMethod() == 0 {
+		// 	// fmt.Println("2")
+		// 	//没有初始化的interface{}
+		// 	// fmt.Println("object:v type is ", v.Type().String())
+		// }
 	default:
-		fmt.Println(v.Kind())
+		// fmt.Println(v.Kind())
 	}
 	d.atEOF()
 }
 
 func (d *decoder) atEOF() {
 	d.next()
-	if d.token.Type() != tokEOF {
+	if d.token != tokEOF {
 		d.error("结尾字符过多，检查前面的括号封闭")
 	}
 	// fmt.Println(d.token.Type().ToString())
 }
 
-func (d *decoder) literal(v reflect.Value) {
-
+func (d *decoder) expect(tok tokType) {
+	if tok != d.token {
+		d.error("expect token: " + tok.ToString())
+	}
+	d.next()
 }
-func (d *decoder) valueInterface() interface{} {
-	// fmt.Println("valueInterface")
 
-	switch d.token.Type() {
+func (d *decoder) valueInterface() interface{} {
+	// fmt.Println("valueInterface ", d.token.ToString(), d.val)
+	switch d.token {
 	case tokLBrace:
 		d.next()
-		if d.token.Type() == tokRBrace {
+		// fmt.Println("valueInterface ", d.token.ToString(), d.val)
+		if d.token == tokRBrace {
 			return nil
 		}
-		if d.token.Type() == tokIdent {
-			return d.objectInterface()
-		} else if d.token.Type() == tokInt || d.nextTok.Type() == tokAssign {
+		if d.token == tokIdent || d.token == tokLBracket {
 			return d.objectInterface()
 		}
 		return d.arrayInterface()
-	case tokIdent:
-		return d.objectInterface()
-	case tokInt:
-		if d.nextTok.Type() == tokAssign {
-			return d.objectInterface()
-		}
-		fallthrough
 	default:
+		// fmt.Println("valueInterface default", d.token.ToString(), d.val)
 		return d.literalInterface()
 	}
 }
 
 func (d *decoder) arrayInterface() []interface{} {
+	// fmt.Println("arrayInterface", d.token.ToString(), d.val)
 	v := make([]interface{}, 0)
 	// d.next()
 	for {
 		v = append(v, d.valueInterface())
 		d.next()
-		if d.token.Type() == tokRBrace {
+		if d.token == tokRBrace {
 			// d.next()
 			break
 		}
@@ -209,75 +201,95 @@ func (d *decoder) arrayInterface() []interface{} {
 }
 
 func (d *decoder) objectInterface() map[string]interface{} {
-	// fmt.Println("objectInterface")
 	m := make(map[string]interface{})
-	// d.next()
 	for {
-		key := d.token.Value()
-		d.next()
-		if d.token.Type() != tokAssign {
-			d.error("缺少=号")
+		// fmt.Println("objectInterface", d.token.ToString(), d.val)
+		key := ""
+		tok := d.token
+		if tok == tokLBracket {
+			// '[', numeric key
+			d.next()
+			// fmt.Println("objectInterface key", d.token.ToString(), d.val)
+			if d.token != tokInt && d.token != tokString {
+				d.error("failed to parse key of table")
+			}
+			key = d.val
+			d.next()
+			d.expect(tokRBracket)
+		} else if tok == tokIdent {
+			key = d.val
+			d.next()
+		} else {
+			d.error("invalid key for table")
 		}
-		d.next()
+		// fmt.Println("objectInterface expect =", d.token.ToString(), d.val)
+
+		d.expect(tokAssign)
+
+		// fmt.Println("key=", key)
 		m[key] = d.valueInterface()
+		// fmt.Println("val=", d.val)
 		d.next()
 		// fmt.Println(d.token)
-		if d.token.Type() == tokRBrace {
+		if d.token == tokRBrace {
 			// d.next()
 			break
-		} else if d.token.Type() == tokLBrace {
-			d.error("缺少}号")
 		}
 	}
 	return m
 }
 
 func (d *decoder) literalInterface() interface{} {
-	v := d.token.Value()
-	switch d.token.Type() {
+	tok := d.token
+	val := d.val
+	switch tok {
 	case tokInt:
-		num, err := strconv.ParseInt(v, 10, 64)
+		num, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
 			d.error(err.Error())
 		}
 		return num
 	case tokFloat:
-		f, err := strconv.ParseFloat(v, 64)
+		f, err := strconv.ParseFloat(val, 64)
 		if err != nil {
 			d.error(err.Error())
 		}
 		return f
 	case tokString:
-		str, err := strconv.Unquote(v)
+		str, err := strconv.Unquote(val)
 		if err != nil {
 			d.error(err.Error())
 		}
 		return str
 	case tokBool:
-		if d.token.Value() == "false" {
+		if val == "false" {
 			return false
-		} else if d.token.Value() == "true" {
+		} else if val == "true" {
 			return true
 		}
-		d.error("不支持的布尔值" + d.token.Value())
+		d.error("不支持的布尔值" + val)
 	default:
-		d.error("不支持的类型" + d.token.String())
+		d.error(fmt.Sprintf("不支持的类型: %s", tok.ToString()))
 	}
 	return nil
 }
 
-func (d *decoder) stringInterface() string {
-	return d.token.Value()
+func simpleStr(str string) string {
+	if len(str) > 50 {
+		return fmt.Sprintf("%s ... %s", str[:25], str[len(str)-25:])
+	}
+	return str
 }
 
 func (d *decoder) error(msg string) {
-	str := d.token.Value()
-	for i := 0; i < 5; i++ {
-		if d.token.Type() == tokEOF {
-			break
-		}
-		d.next()
-		str = str + d.token.Value()
-	}
-	panic(fmt.Errorf("位于%v前面:%v", str, msg))
+	// str := d.val
+	pos := d.pos
+	// for i := 0; i < 5; i++ {
+	// 	if d.token == tokEOF {
+	// 		break
+	// 	}
+	// 	d.next()
+	// 	str = str + d.val
+	// }
+	panic(fmt.Errorf("错误: %s\n位于%d, \"%s\"", msg, pos, d.src[pos:pos+50]))
 }

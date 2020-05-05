@@ -21,6 +21,7 @@ type tokType int
 const (
 	tokEOF tokType = iota
 	tokError
+
 	tokLiteralBegin
 	tokComment
 	tokIdent
@@ -29,6 +30,7 @@ const (
 	tokString
 	tokBool
 	tokLiteralEnd
+
 	tokOperatorBegin
 	tokAssign   // =
 	tokLBrace   // {

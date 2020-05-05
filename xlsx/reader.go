@@ -1,13 +1,14 @@
 package xlsx
 
 import (
-	"github.com/pkg/errors"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type Reader interface {
 	SetFilterFunc(filterFunc FilterFunc)
-	ReadAll() (string, error)
+	ReadAll() ([]byte, error)
 }
 
 //FilterFunc 过滤器

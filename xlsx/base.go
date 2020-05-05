@@ -1,30 +1,33 @@
 package xlsx
 
 import (
+	"bytes"
 	"fmt"
-	"github.com/pkg/errors"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/pkg/errors"
 )
 
 type baseReader struct {
-	name        string           // name of sheet config
-	data        [][]string       // data from excel
-	filter      string           // 用来筛选字段的条件
-	keyCount    int              // key的数量，当keyCount=0时，表示是数组，大于0表示是对象（或map）
-	keyNext     int              // 下行的key所在列
-	keyIndex    int              // 当前前的key所在列
-	filterRow   int              // 过滤词所在行
-	keyRow      int              // key所在行
-	typeRow     int              // 类型所在行
-	row         int              // 当前行
-	col         int              // 当前列
-	rowCount    int              // 行数
-	colCount    int              // 列数
-	builder     *strings.Builder // strings.Builder for building result string
-	doneChan    chan bool        // chan for emit value
-	filterflags []bool           // 用来标记该列是否需要导出
+	name      string        // name of sheet config
+	data      [][]string    // data from excel
+	filter    string        // 用来筛选字段的条件
+	keyCount  int           // key的数量，当keyCount=0时，表示是数组，大于0表示是对象（或map）
+	keyNext   int           // 下行的key所在列
+	keyIndex  int           // 当前前的key所在列
+	filterRow int           // 过滤词所在行
+	keyRow    int           // key所在行
+	typeRow   int           // 类型所在行
+	row       int           // 当前行
+	col       int           // 当前列
+	rowCount  int           // 行数
+	colCount  int           // 列数
+	builder   *bytes.Buffer // strings.Builder for building result string
+	// builder     *strings.Builder // strings.Builder for building result string
+	doneChan    chan bool // chan for emit value
+	filterflags []bool    // 用来标记该列是否需要导出
 	// validCol    []int            // 用来标记需要导出的列
 	cellTypes  []cellType // 每列的数据类型
 	errors     []error    // 用来记录产生的错误
@@ -55,7 +58,7 @@ func NewBaseReader(name string, src [][]string, filter string, keyCount,
 	// fmt.Println("key count is ", r.keyCount)
 	r.filterflags = make([]bool, r.colCount)
 	r.cellTypes = make([]cellType, r.colCount)
-	r.builder = new(strings.Builder)
+	r.builder = new(bytes.Buffer)
 	r.errors = make([]error, 0, 5)
 	r.doneChan = make(chan bool)
 	r.row = firstRow
@@ -97,7 +100,7 @@ type stackTracer interface {
 }
 
 // ReadAll 将excel 转为lua字符串
-func (r *baseReader) ReadAll() (string, error) {
+func (r *baseReader) ReadAll() ([]byte, error) {
 	validcol := 0
 	for i := 0; i < r.colCount; i++ {
 		if r.filterflags[i] {
@@ -106,7 +109,7 @@ func (r *baseReader) ReadAll() (string, error) {
 		}
 	}
 	if validcol == 0 {
-		return "", ErrNoContent
+		return nil, ErrNoContent
 	}
 	//开始处理表格
 	go r.run()
@@ -129,7 +132,7 @@ func (r *baseReader) ReadAll() (string, error) {
 		err = fmt.Errorf(errStr.String())
 	}
 
-	return r.builder.String(), err
+	return r.builder.Bytes(), err
 }
 
 func (r *baseReader) run() {

@@ -3,6 +3,7 @@ package encode
 import (
 	"github.com/billyplus/luatable"
 	"github.com/stretchr/testify/assert"
+
 	// "reflect"
 	"testing"
 )
@@ -10,7 +11,7 @@ import (
 func TestEncodeJSON(t *testing.T) {
 	for _, testcase := range jsontests {
 		var v interface{}
-		err := luatable.Unmarshal(testcase.data, &v)
+		err := luatable.Unmarshal([]byte(testcase.data), &v)
 		assert.Nilf(t, err, "error reading content:%v", err)
 		data, err := EncodeJSON(v)
 		assert.Nilf(t, err, "error encoding json:%v", err)
