@@ -12,8 +12,10 @@ type Config struct {
 
 // ExportConfig 导出配置
 type ExportConfig struct {
-	Filter string
-	Format string
-	GenLua bool `mapstructure:"genlua"`
-	Path   string
+	Filter   string
+	Format   string
+	GenLua   bool `mapstructure:"genlua"`
+	Path     string
+	OutCellX int `mapstructure:"outCellX"`
+	OutCellY int `mapstructure:"outCellY"`
 }

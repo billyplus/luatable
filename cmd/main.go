@@ -2,12 +2,15 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
 	// "log"
-	"github.com/pkg/profile"
 	"os"
 	"time"
+
+	"github.com/pkg/profile"
 )
 
 func init() {
@@ -42,7 +45,7 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 
 		start := time.Now()
-		gen := newGenerator(20)
+		gen := newGenerator()
 		gen.GenConfig(config)
 		gen.Close()
 		dur := time.Since(start)

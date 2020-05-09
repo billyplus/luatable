@@ -3,8 +3,9 @@ package main
 import (
 	// "bytes"
 	// "github.com/billyplus/luatable/encode"
+	"bytes"
+
 	"github.com/billyplus/luatable/xlsx"
-	"strings"
 )
 
 // EncodeTSClass 根据 interface 生成ts定义文件
@@ -23,13 +24,13 @@ type prop struct {
 	Comm string
 }
 
-func GenTSFile(sheet *WorkSheet, filter string) (string, error) {
+func GenTSFile(sheet *WorkSheet, filter string) ([]byte, error) {
 	nameRow := 0
 	filterRow := 1
 	typRow := 3
 	commRow := 2
 
-	builder := new(strings.Builder)
+	builder := new(bytes.Buffer)
 	// builder := bytes.NewBuffer(make([]byte, 2048))
 	builder.WriteString("class ")
 	builder.WriteString(sheet.Name)
@@ -55,9 +56,9 @@ func GenTSFile(sheet *WorkSheet, filter string) (string, error) {
 	builder.WriteString("}\n")
 
 	if builder.Len() > 50+2*len(sheet.Name) {
-		return builder.String(), nil
+		return builder.Bytes(), nil
 	}
-	return "", xlsx.ErrNoContent
+	return nil, xlsx.ErrNoContent
 }
 
 func getTypeFromString(v string) string {

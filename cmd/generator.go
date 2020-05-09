@@ -15,56 +15,31 @@ import (
 	"time"
 
 	excel360 "github.com/360EntSecGroup-Skylar/excelize"
-	"github.com/billyplus/luatable/worker"
+	"github.com/billyplus/luatable"
+	"github.com/billyplus/luatable/encode"
 	"github.com/billyplus/luatable/xlsx"
 	"github.com/pkg/errors"
 	excel "github.com/tealeg/xlsx"
+	luaparse "github.com/yuin/gopher-lua/parse"
 )
 
 type generator struct {
-	wg         *sync.WaitGroup
-	dispatcher *worker.Dispatcher
-	config     *Config
-	jobQueue   chan worker.Job
-	errChan    chan error
-	sheetChan  chan *WorkSheet
-	quit       chan bool
-	errors     []error
+	wg     *sync.WaitGroup
+	config *Config
+	quit   chan bool
+	errors []error
 }
 
-func newGenerator(maxworker int) *generator {
+func newGenerator() *generator {
 	gen := &generator{}
-	gen.dispatcher = worker.NewDispater(maxworker)
-	gen.jobQueue = make(chan worker.Job, 10)
-	gen.errChan = make(chan error)
-	gen.sheetChan = make(chan *WorkSheet, 10)
 	gen.wg = &sync.WaitGroup{}
 	gen.quit = make(chan bool)
 
-	go gen.dispatcher.Run(gen.jobQueue, gen.errChan, gen.wg)
-	go gen.handleError()
 	return gen
 }
 
 type stackTracer interface {
 	StackTrace() errors.StackTrace
-}
-
-func (gen *generator) handleError() {
-	for {
-		select {
-		case err := <-gen.errChan:
-			// 空文件，不处理
-			if errors.Cause(err) == xlsx.ErrNoContent {
-				continue
-			}
-			gen.errors = append(gen.errors, err)
-
-		case <-gen.quit:
-			break
-		}
-	}
-
 }
 
 func (gen *generator) Close() {
@@ -95,64 +70,59 @@ func (gen *generator) PrintErrors() {
 
 func (gen *generator) GenConfig(conf Config) {
 	gen.config = &conf
-	go gen.iterateWorksheet(conf.Out)
 	fmt.Println("handle path:", conf.DataPath)
 
-	func(sheetChan chan *WorkSheet, errChan chan error) {
-		md5list := make(map[string]string)
-		data, err := ioutil.ReadFile(conf.MD5File)
+	md5list := make(map[string]string)
+	data, err := ioutil.ReadFile(conf.MD5File)
+	if err != nil {
+		return
+	}
+	if err := json.Unmarshal(data, &md5list); err != nil {
+		return
+	}
+	filepath.Walk(conf.DataPath, func(path string, fileinfo os.FileInfo, err error) error {
 		if err != nil {
-			return
+			return nil
 		}
-		if err := json.Unmarshal(data, &md5list); err != nil {
-			return
-		}
-		filepath.Walk(conf.DataPath, func(path string, fileinfo os.FileInfo, err error) error {
-			fmt.Println("handle path:", path)
-			if err != nil {
-				fmt.Println("handle path:", err.Error())
-				return nil
-			}
-			fmt.Println("1 handle path:", path)
-			if fileinfo.IsDir() {
-				if conf.SkipSubDir && path != conf.DataPath {
-					fmt.Println("skip handle path:", path)
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			filename := fileinfo.Name()
-			fpath := ""
-			if filepath.Ext(filename) == ".xlsx" {
-				if strings.HasPrefix(filename, "~$") || strings.HasPrefix(filename, ".~") {
-					return nil
-				}
-				fpath = filepath.Join(conf.DataPath, filename)
-				//check hash
-				checksum, err := md5Hash(fpath)
-				if err != nil {
-					return nil
-				}
-				md5str, ok := md5list[filename]
-				if ok && checksum == md5str {
-					fmt.Println("skip file:", filename)
-					return nil
-				}
-				md5list[filename] = checksum
-				if err = saveMd5Hash(md5list, conf.MD5File); err != nil {
-					return err
-				}
-				fmt.Println("handle file:", filename)
-				gen.iterateXlsx(fpath)
+		if fileinfo.IsDir() {
+			if conf.SkipSubDir && path != conf.DataPath {
+				return filepath.SkipDir
 			}
 			return nil
-		})
+		}
 
-	}(gen.sheetChan, gen.errChan)
+		filename := fileinfo.Name()
+		fpath := ""
+		if filepath.Ext(filename) == ".xlsx" {
+			if strings.HasPrefix(filename, "~$") || strings.HasPrefix(filename, ".~") {
+				return nil
+			}
+			fpath = filepath.Join(conf.DataPath, filename)
+			//check hash
+			checksum, err := md5Hash(fpath)
+			if err != nil {
+				return nil
+			}
+			md5str, ok := md5list[filename]
+			if ok && checksum == md5str {
+				fmt.Println("skip file:", filename)
+				return nil
+			}
+			fmt.Println("handle file:", filename)
+			if err = gen.iterateXlsx(fpath); err != nil {
+				fmt.Printf("failed to handle xlsx err: %+v", err)
+				return err
+			}
+			md5list[filename] = checksum
+			if err = saveMd5Hash(md5list, conf.MD5File); err != nil {
+				fmt.Println("failed to save md5", fpath)
+				return err
+			}
+		}
+		return nil
+	})
 
 	fmt.Println("wait")
-	gen.wg.Wait()
 	time.Sleep(500 * time.Microsecond)
 	return
 }
@@ -193,76 +163,73 @@ func md5Hash(filepath string) (string, error) {
 	return hex.EncodeToString(hashInBytes), nil
 }
 
-func (gen *generator) iterateWorksheet(configs []ExportConfig) {
-	for {
-		sheet := <-gen.sheetChan
-		for _, conf := range configs {
-			task := NewTask(sheet, conf)
-			gen.wg.Add(1)
-			gen.jobQueue <- task.Run
-			fmt.Printf("生成 { file: %s.%s, target: %s}\n", sheet.Name, conf.Format, conf.Filter)
-		}
-	}
-}
-
-func (gen *generator) iterateXlsx(file string) {
-	defer func() { // 用defer来捕获到panic异常
-		if r := recover(); r != nil {
-			var err error
-			if e, ok := r.(error); ok {
-				err = errors.WithStack(e)
-			} else {
-				err = errors.Errorf("错误：%v", e)
-			}
-			gen.errChan <- err
-		}
-	}()
+func (gen *generator) iterateXlsx(file string) (err error) {
+	// defer func() { // 用defer来捕获到panic异常
+	// 	if r := recover(); r != nil {
+	// 		if e, ok := r.(error); ok {
+	// 			err = errors.WithStack(e)
+	// 		} else {
+	// 			err = errors.Errorf("错误：%v", e)
+	// 		}
+	// 	}
+	// }()
 	if gen.config.Use360 {
-		gen.sheetsFromExcel360(file)
+		err = gen.sheetsFromExcel360(file)
 	} else {
-		gen.sheetsFromXlsx(file)
+		err = gen.sheetsFromXlsx(file)
 	}
+	return
 }
 
-func (gen *generator) sheetsFromXlsx(file string) {
+func (gen *generator) sheetsFromXlsx(file string) error {
 	xlsfile, err := excel.OpenFile(file)
 	if err != nil {
-		gen.errChan <- err
-		return
+		return err
 	}
+	lst := strings.Split(file, "/")
+	filename := lst[len(lst)-1]
 
 	for _, sheet := range xlsfile.Sheets {
 		if checkValidSheet(sheet) {
 			sh := sheet.Name
 			data, err := xlsx.SheetToSlice(sheet)
 			if err != nil {
-				gen.errChan <- err
-				continue
+				return err
 			}
 			worksheet := &WorkSheet{
-				Type:       data[0][1],
-				Data:       data[4:],
-				Name:       sh,
-				ServerPath: data[1][1],
+				Type:     data[0][1],
+				Data:     data[4:],
+				Name:     sh,
+				FileName: filename,
 			}
+			head := data[0][4]
+			head = strings.ReplaceAll(head, " ", "")
+			if strings.HasSuffix(head, "={") {
+				head = head[:len(head)-2]
+			}
+			worksheet.Head = head
 			if worksheet.Type == "base" {
 				count, err := strconv.ParseUint(data[2][1], 10, 64)
 				if err != nil {
-					gen.errChan <- err
-					continue
+					return err
 				}
 				worksheet.KeyCount = int(count)
 			}
-			gen.sheetChan <- worksheet
+			for _, expConf := range gen.config.Out {
+				outfile := data[expConf.OutCellX][expConf.OutCellY]
+				if err = genConfig(worksheet, expConf, outfile); err != nil {
+					return err
+				}
+			}
 		}
 	}
+	return nil
 }
 
-func (gen *generator) sheetsFromExcel360(file string) {
+func (gen *generator) sheetsFromExcel360(file string) error {
 	xlsfile, err := excel360.OpenFile(file)
 	if err != nil {
-		gen.errChan <- err
-		return
+		return err
 	}
 
 	// for index := range xlsfile.SheetCount {
@@ -273,24 +240,34 @@ func (gen *generator) sheetsFromExcel360(file string) {
 		// data := xlsfile.GetRows(sh)
 		// sheet := xlsfile.
 		if checkValid360Sheet(data) {
+			data[7][0] = "comment"
 			worksheet := &WorkSheet{
 				Type: data[0][1],
-				Data: data[5:],
+				Data: data[4:],
 				Name: sh,
-				// ServerPath: data[0][3],
-				// ClientPath: data[1][3],
 			}
+			head := data[0][4]
+			head = strings.ReplaceAll(head, " ", "")
+			if strings.HasSuffix(head, "={") {
+				head = head[:len(head)-2]
+			}
+			worksheet.Head = head
 			if worksheet.Type == "base" {
 				count, err := strconv.ParseUint(data[2][1], 10, 64)
 				if err != nil {
-					gen.errChan <- err
-					continue
+					return err
 				}
 				worksheet.KeyCount = int(count)
 			}
-			gen.sheetChan <- worksheet
+			for _, expConf := range gen.config.Out {
+				outfile := data[expConf.OutCellX][expConf.OutCellY]
+				if err = genConfig(worksheet, expConf, outfile); err != nil {
+					return err
+				}
+			}
 		}
 	}
+	return nil
 }
 
 func checkValid360Sheet(data [][]string) bool {
@@ -339,12 +316,12 @@ func checkValidSheet(sheet *excel.Sheet) bool {
 
 // WorkSheet 对应一张有效的数据表
 type WorkSheet struct {
-	Type       string
-	Data       [][]string
-	ServerPath string
-	ClientPath string
-	Name       string
-	KeyCount   int
+	Type     string
+	Data     [][]string
+	Name     string
+	Head     string
+	FileName string
+	KeyCount int
 }
 
 func readerFatory(sheet *WorkSheet, filter string) xlsx.Reader {
@@ -354,4 +331,97 @@ func readerFatory(sheet *WorkSheet, filter string) xlsx.Reader {
 	default:
 		return xlsx.NewTinyReader(sheet.Name, sheet.Data, filter, 1, 2, 3, 4)
 	}
+}
+
+func genConfig(sheet *WorkSheet, cnf ExportConfig, out string) (err error) {
+	fmt.Println("gen config for sheet: ", sheet.Head)
+	outfile := filepath.Join(cnf.Path, out)
+	// 创建目录
+	if err = os.MkdirAll(filepath.Dir(outfile), 0644); err != nil {
+		return
+	}
+	fmt.Println("success mkdirall ")
+
+	reader := readerFatory(sheet, cnf.Filter)
+	var result []byte
+	fmt.Println("start readall ")
+	result, err = reader.ReadAll()
+	if err != nil {
+		if err == xlsx.ErrNoContent {
+			err = nil
+		}
+		return
+	}
+
+	if cnf.Format == "lua" {
+		f, err := os.OpenFile(outfile, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		tag := fmt.Sprintf("-- from %s %s \n%s=", sheet.FileName, sheet.Name, sheet.Head)
+
+		if _, err = f.WriteString(tag); err != nil {
+			return err
+		}
+		if _, err = f.Write(result); err != nil {
+			return err
+		}
+		f.Seek(0, 0)
+		if _, err = luaparse.Parse(f, sheet.Head); err != nil {
+			return errors.Wrap(err, "parse lua")
+		}
+		return nil
+	}
+	// 其它格式
+
+	var value interface{}
+	err = luatable.Unmarshal(result, &value)
+	if err != nil {
+		return
+	}
+	fmt.Println("path", cnf.Path, " ", outfile)
+	var enc encode.EncodeFunc
+	switch cnf.Format {
+	case "xml":
+		enc = encode.EncodeXML
+	case "json":
+		enc = encode.EncodeJSON
+	default:
+		return errors.Errorf("不支持的格式类型{out.format}=%s", cnf.Format)
+	}
+	// 编码成json或xml
+	var data []byte
+	data, err = enc(value)
+	if err != nil {
+		return
+	}
+	// 写入文件
+	if err = ioutil.WriteFile(outfile, data, 0644); err != nil {
+		return
+	}
+	return nil
+}
+
+func genTS(sheet *WorkSheet, cnf ExportConfig) (err error) {
+	// defer func() {
+	// 	if err != nil {
+	// 		err = errors.Wrapf(err, "表: %s ", sheet.Name)
+	// 	}
+	// }()
+	// 创建目录
+	if err = os.MkdirAll(cnf.Path, 0644); err != nil {
+		return
+	}
+
+	var data []byte
+	data, err = GenTSFile(sheet, cnf.Filter)
+	if err != nil {
+		return
+	}
+	outfile := filepath.Join(cnf.Path, sheet.Name+"."+cnf.Format)
+	// 写入文件
+	err = ioutil.WriteFile(outfile, []byte(data), 0644)
+	return
 }

@@ -22,6 +22,7 @@ type baseReader struct {
 	typeRow   int           // 类型所在行
 	row       int           // 当前行
 	col       int           // 当前列
+	indent    int           // 缩进
 	rowCount  int           // 行数
 	colCount  int           // 列数
 	builder   *bytes.Buffer // strings.Builder for building result string
@@ -51,9 +52,21 @@ func NewBaseReader(name string, src [][]string, filter string, keyCount,
 		keyRow:    keyRow,
 		typeRow:   typeRow,
 	}
+	r.data[3][0] = "comment"
 	r.rowCount = len(src)
-	// fmt.Println("row count is ", r.rowCount)
-	r.colCount = len(src[0])
+	for i := 0; i < len(src); i++ {
+		if len(r.data[i]) < 2 || r.data[i][1] == "" {
+			r.rowCount = i
+			break
+		}
+	}
+	fmt.Println("row count is ", r.rowCount)
+	r.colCount = len(src[keyRow])
+	for i := 1; i < r.colCount; i++ {
+		if r.data[keyRow][i] == "" {
+			r.colCount = i
+		}
+	}
 	r.keyCount = keyCount
 	// fmt.Println("key count is ", r.keyCount)
 	r.filterflags = make([]bool, r.colCount)
@@ -64,6 +77,7 @@ func NewBaseReader(name string, src [][]string, filter string, keyCount,
 	r.row = firstRow
 	r.col = 0
 	r.keyNext = 0
+	r.indent = 0
 
 	// 使用默认的过滤器
 	r.filterFunc = DefaultFilterFunc
@@ -88,6 +102,7 @@ func (r *baseReader) refleshValidCol() {
 	for i := 0; i < r.colCount; i++ {
 		// 设置导出标记，用来判断每列是否需要导出
 		r.filterflags[i] = r.filterFunc(r.data[r.filterRow][i], r.filter)
+		fmt.Println("filter i=", i, r.filterflags[i])
 		// if r.filterFunc(r.data[r.filterRow][i], r.filter) {
 		// 	r.validCol[validNum] = i
 		// 	validNum++
@@ -102,6 +117,7 @@ type stackTracer interface {
 // ReadAll 将excel 转为lua字符串
 func (r *baseReader) ReadAll() ([]byte, error) {
 	validcol := 0
+	fmt.Println("read all")
 	for i := 0; i < r.colCount; i++ {
 		if r.filterflags[i] {
 			validcol++
@@ -111,48 +127,30 @@ func (r *baseReader) ReadAll() ([]byte, error) {
 	if validcol == 0 {
 		return nil, ErrNoContent
 	}
+
 	//开始处理表格
-	go r.run()
-	<-r.doneChan
-	// b := []byte(r.builder.String())
-	var err error
-	if len(r.errors) == 0 {
-		err = nil
-	} else {
-		var errStr strings.Builder
-		for _, e := range r.errors {
-			errStr.WriteString("____")
-			if errx, ok := e.(stackTracer); ok {
-				errStr.WriteString(fmt.Sprintf("%+v\n", errx.StackTrace()))
-			} else {
-				errStr.WriteString(e.Error())
-			}
-			errStr.WriteByte('\n')
-		}
-		err = fmt.Errorf(errStr.String())
+	if err := r.run(); err != nil {
+		return nil, err
 	}
 
-	return r.builder.Bytes(), err
+	return r.builder.Bytes(), nil
 }
 
-func (r *baseReader) run() {
+func (r *baseReader) run() (err error) {
 	defer func() {
-		e := recover()
-		if err, ok := e.(error); ok {
-			r.errorf("表%s数据第%d行(共%d行)第%d列有问题", r.name, r.row, r.rowCount, r.col)
-			r.errors = append(r.errors, errors.WithStack(err))
+		if e := recover(); e != nil {
+			if ex, ok := e.(error); ok {
+				err = errors.Wrap(ex, "ReadAll")
+			} else {
+				err = errors.Errorf("%+v", ex)
+			}
 		}
-		r.done()
 	}()
-
+	fmt.Println("start to run")
 	for r.state = readBeginOfFile; r.state != nil; {
 		r.state = r.state(r)
 	}
-	r.done()
-}
-
-func (r *baseReader) done() {
-	r.doneChan <- true
+	return
 }
 
 func (r *baseReader) emit(value string) {
@@ -181,10 +179,18 @@ func (r *baseReader) emitValue() {
 
 func (r *baseReader) emitString() {
 	if len(r.data[r.row]) <= r.col {
-		fmt.Println()
+		fmt.Printf("data is empty sheet=%s row=%d col=%d\n", r.name, r.row, r.col)
+		r.builder.WriteString("''")
+		return
 	}
-
-	r.builder.WriteString(strconv.Quote(r.data[r.row][r.col]))
+	v := r.data[r.row][r.col]
+	if strings.HasPrefix(v, "Lang.") {
+		r.builder.WriteString(v)
+	} else {
+		r.builder.WriteByte('\'')
+		r.builder.WriteString(v)
+		r.builder.WriteByte('\'')
+	}
 }
 
 func (r *baseReader) emitBool() {
@@ -214,7 +220,11 @@ func (r *baseReader) emitInt() {
 			}
 			val = int64(fval)
 		}
-		r.builder.WriteString(strconv.FormatInt(val, 10))
+		if val > 1e11 {
+			r.builder.WriteString(fmt.Sprintf("%e", float64(val)))
+		} else {
+			r.builder.WriteString(strings.ToLower(strconv.FormatInt(val, 10)))
+		}
 	}
 }
 
@@ -223,8 +233,25 @@ func (r *baseReader) emitFloat() {
 	if v == "" {
 		r.builder.WriteString("0.0")
 	} else {
-		r.builder.WriteString(v)
+		// 尝试float64
+		_, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			// 不是数字
+			r.errorf("第%d行%d列数值不是数字", r.row, r.col)
+		}
+		r.builder.WriteString(strings.ToLower(v))
+		// if val > 1e11 {
+		// 	r.builder.WriteString(fmt.Sprintf("%e", val))
+		// } else {
+		// }
+		// r.builder.WriteString(v)
 	}
+}
+
+func (r *baseReader) emitNumericKey() {
+	r.builder.WriteString("[")
+	r.builder.WriteString(r.data[r.row][r.col])
+	r.builder.WriteString("]")
 }
 
 func (r *baseReader) emitRawValue() {
@@ -232,13 +259,20 @@ func (r *baseReader) emitRawValue() {
 }
 
 func (r *baseReader) emitComment() {
-	r.builder.WriteString("/*")
+	r.builder.WriteString("--[[")
 	r.builder.WriteString(r.data[r.row][r.col])
-	r.builder.WriteString("*/")
+	r.builder.WriteString("]]")
+}
+
+func (r *baseReader) emitIndent() {
+	if r.indent > 0 {
+		r.builder.WriteString(strings.Repeat("\t", r.indent))
+	}
 }
 
 func (r *baseReader) errorf(format string, args ...interface{}) {
-	r.errors = append(r.errors, fmt.Errorf(format, args...))
+	msg := fmt.Sprintf("表%s第%d行(共%d行)第%d列数据[%s]有问题\n", r.name, r.row, r.rowCount, r.col, r.data[r.row][r.col]) + fmt.Sprintf(format, args...)
+	panic(errors.New(msg))
 }
 
 // func (r *baseReader)writeString(){
@@ -247,26 +281,32 @@ func (r *baseReader) errorf(format string, args ...interface{}) {
 
 func readBeginOfFile(r *baseReader) stateFunc {
 	// r.emit(r.name)
-	r.emit("{")
+	// fmt.Println("begin of file")
+	r.emit("{\n")
+	r.indent++
 	return readBeginOfLine
 }
 
 func readBeginOfLine(r *baseReader) stateFunc {
+	// fmt.Println("begin of line row=", r.row)
 	// 跳过首单元格为空的行
-	for {
-		if r.row >= r.rowCount {
-			return readEndOfFile
-		}
-		if len(r.data[r.row]) == 0 || r.data[r.row][0] == "" {
-			r.row++
-			continue
-		}
-		break
+	// for {
+	if r.row >= r.rowCount {
+		return readEndOfFile
 	}
+	if len(r.data[r.row]) < 2 || r.data[r.row][1] == "" {
+		return readEndOfFile
+		// r.row++
+		// continue
+	}
+	// break
+	// }
 	// fmt.Println("row is ", r.row)
 	// keycount = 0 表示是数组
 	if r.keyCount == 0 {
-		r.emit("{")
+		r.emitIndent()
+		r.emit("{\n")
+		r.indent++
 		return readNext
 	}
 
@@ -298,14 +338,25 @@ func readBeginOfLine(r *baseReader) stateFunc {
 		}
 		if isIdent(r.cellTypes[r.col]) {
 			if j >= r.keyIndex {
-				r.emitRawValue()
-				r.emit("={")
+				r.emitIndent()
+				switch r.cellTypes[r.col] {
+				case cellInt:
+					r.emitNumericKey()
+				case cellString:
+					r.emitRawValue()
+				default:
+					r.errorf("invalid key col=%d type=%d", r.col, r.cellTypes[r.col])
+				}
+
+				r.emit("={\n")
+				// r.indent++
 			}
 			// r.keyIndex++
 			j++
 		}
 	}
 	r.col = oldColumn
+	r.indent++
 
 	return readNext
 }
@@ -317,17 +368,24 @@ func readBeginOfLine(r *baseReader) stateFunc {
 
 func readEndOfLine(r *baseReader) stateFunc {
 	// keycount = 0 表示是数组
+	r.indent--
 	if r.keyCount == 0 {
-		r.emit("}")
+		r.emitIndent()
+		r.emit("},\n")
 	} else {
 		for i := r.keyNext; i < r.keyCount; i++ {
-			r.emit("}")
+			r.emitIndent()
+			r.emit("},\n")
+			// if i != r.keyCount-1 {
+			// 	r.emit("\n")
+			// }
 		}
 	}
 	// 最后一列不需要逗号
-	if r.row < r.rowCount-1 {
-		r.emit(",")
-	}
+	// if r.row < r.rowCount-1 {
+	// 	r.emit(",")
+	// }
+	// r.emit(",\n")
 
 	// 重置col的位置
 	r.col = 0
@@ -339,7 +397,9 @@ func readEndOfLine(r *baseReader) stateFunc {
 }
 
 func readEndOfFile(r *baseReader) stateFunc {
-	r.emit("}\n")
+	r.indent--
+	r.emitIndent()
+	r.emit("}")
 	return nil
 }
 
@@ -353,12 +413,14 @@ func readNext(r *baseReader) stateFunc {
 		// case cellString:
 		// 	r.emitString()
 		default:
+			r.emitIndent()
 			r.emitKey()
-			r.emit("=")
+			r.emit(" = ")
 			r.emitValue()
-			if r.col < r.colCount-1 {
-				r.emit(",")
-			}
+			// if r.col < r.colCount-1 {
+			// 	r.emit(",")
+			// }
+			r.emit(",\n")
 		}
 	}
 

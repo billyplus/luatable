@@ -123,12 +123,14 @@ var (
 			name: "简单测试",
 			data: `{Config1 = {
 				{
-					id=1,
+					-- test comment
+					id=1, --测试
 					name="name1",
 				},
-				{
-					id=2,
+				{ --[[test comment2]]
+					id=-2,
 					name="name2",
+					lang=Lang.ActivityType_mail_5,
 				}
 			},
 			Config2 = {
@@ -142,13 +144,13 @@ var (
 				}
 			}}
 `,
-			want: `{"Config1":[{"id":1,"name":"name1"},{"id":2,"name":"name2"}],"Config2":{"name1":{"id":1,"name":"name1"},"name2":{"id":2,"name":"name2"}}}`,
+			want: `{"Config1":[{"id":1,"name":"name1"},{"id":-2,"lang":"Lang.ActivityType_mail_5","name":"name2"}],"Config2":{"name1":{"id":1,"name":"name1"},"name2":{"id":2,"name":"name2"}}}`,
 		},
 		{ // 双key
 			name: "双key测试",
-			data: `{test={[1001]={name1={id=1001,name="name1",type=1,icon="icon/head1001",attack=10,life=100},name2={id=1001,name="name2",type=2,icon="icon/head1002",attack=11,life=101}},[1003]={name3={id=1003,name="name3",type=3,icon="icon/head1003",attack=12,life=102}},[1004]={name4={id=1004,name="name4",type=4,icon="icon/head1004",attack=13,life=103}}}}
+			data: `{test={[1001]={name1={id=1001,name="name1",type=1,icon="",attack=-10,life=100},name2={id=1001,name="name2",type=2,icon="icon/head1002",attack=11,life=101}},[1003]={name3={id=1003,name="name3",type=3,icon="icon/head1003",attack=12,life=102}},[1004]={name4={id=1004,name="name4",type=4,icon="icon/head1004",attack=13,life=103}}}}
 `,
-			want: `{"test":{"1001":{"name1":{"attack":10,"icon":"icon/head1001","id":1001,"life":100,"name":"name1","type":1},"name2":{"attack":11,"icon":"icon/head1002","id":1001,"life":101,"name":"name2","type":2}},"1003":{"name3":{"attack":12,"icon":"icon/head1003","id":1003,"life":102,"name":"name3","type":3}},"1004":{"name4":{"attack":13,"icon":"icon/head1004","id":1004,"life":103,"name":"name4","type":4}}}}`,
+			want: `{"test":{"1001":{"name1":{"attack":-10,"icon":"","id":1001,"life":100,"name":"name1","type":1},"name2":{"attack":11,"icon":"icon/head1002","id":1001,"life":101,"name":"name2","type":2}},"1003":{"name3":{"attack":12,"icon":"icon/head1003","id":1003,"life":102,"name":"name3","type":3}},"1004":{"name4":{"attack":13,"icon":"icon/head1004","id":1004,"life":103,"name":"name4","type":4}}}}`,
 		},
 		{ // 三key测试
 			name: "三key测试",
@@ -204,6 +206,42 @@ var (
 			data: `{test={}1001={1={id=1001,type=1,icon="icon/head1001",attack=10,life=100}}}}
 `,
 			err: `invalid key for table: 位于8-"1001={1={"`,
+		},
+		{
+			// 导出
+			name: "导出的",
+			data: `{
+	{
+		id=1001,
+		name="name1",
+		life=100,
+		param={
+	{
+		delay = 10000,
+		actions={{type=6}}, --满血
+	}
+}
+	},
+	{
+		id=1003,
+		name="",
+		life=102,
+		param={test,tt_ttt,aaa_ddd}
+	},
+	{
+		id=1004,
+		name='name4',
+		life=103,
+		param={
+	{
+		delay = 10000,
+		actions={{type=6}}, --满血
+	}
+}
+	}
+}
+`,
+			want: `[{"id":1001,"life":100,"name":"name1","param":[{"actions":[{"type":6}],"delay":10000}]},{"id":1003,"life":102,"name":"","param":[]},{"id":1004,"life":103,"name":"name4","param":[{"actions":[{"type":6}],"delay":10000}]}]`,
 		},
 	}
 )

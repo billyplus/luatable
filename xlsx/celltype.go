@@ -18,6 +18,7 @@ const (
 	cellFloat
 	cellBool
 	cellRaw
+	cellTable
 	end // end of defines
 )
 
@@ -28,7 +29,8 @@ var cells = [...]string{
 	cellInt:     "int",
 	cellFloat:   "float",
 	cellBool:    "bool",
-	cellRaw:     "table",
+	cellRaw:     "raw",
+	cellTable:   "table",
 }
 
 var cellsMap map[string]cellType

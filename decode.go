@@ -50,20 +50,24 @@ func (d *decoder) init(data []byte) {
 
 func (d *decoder) next() {
 	d.pos, d.token, d.val = d.scanner.Scan()
+	// fmt.Println("token=", d.token.ToString(), "val=[", d.val, "]")
+	for d.token == tokComment {
+		d.pos, d.token, d.val = d.scanner.Scan()
+	}
 	if d.token == tokError {
-		d.error("无效字符")
+		d.error("无效字符:[" + d.val + "]")
 	}
 }
 
 func (d *decoder) unmarshal(v interface{}) (err error) {
 	defer func() {
-		e := recover()
-		if ex, ok := e.(error); ok {
-			// fmt.Println(err.Error())
-			err = errors.WithStack(ex)
-			// err = ex
+		if e := recover(); e != nil {
+			if ex, ok := e.(error); ok {
+				err = errors.Wrap(ex, "unmarshal")
+			} else {
+				err = errors.Errorf("%+v", ex)
+			}
 		}
-		// fmt.Println(e)
 	}()
 
 	rv := reflect.ValueOf(v)
@@ -206,6 +210,7 @@ func (d *decoder) objectInterface() map[string]interface{} {
 		// fmt.Println("objectInterface", d.token.ToString(), d.val)
 		key := ""
 		tok := d.token
+		val := d.val
 		if tok == tokLBracket {
 			// '[', numeric key
 			d.next()
@@ -217,7 +222,7 @@ func (d *decoder) objectInterface() map[string]interface{} {
 			d.next()
 			d.expect(tokRBracket)
 		} else if tok == tokIdent {
-			key = d.val
+			key = val
 			d.next()
 		} else {
 			d.error("invalid key for table")
@@ -256,11 +261,16 @@ func (d *decoder) literalInterface() interface{} {
 		}
 		return f
 	case tokString:
+		if val == "" {
+			return ""
+		}
 		str, err := strconv.Unquote(val)
 		if err != nil {
-			d.error(err.Error())
+			d.error(err.Error() + "    val=[" + val + "]")
 		}
 		return str
+	case tokIdent:
+		return val
 	case tokBool:
 		if val == "false" {
 			return false
@@ -283,7 +293,10 @@ func simpleStr(str string) string {
 
 func (d *decoder) error(msg string) {
 	// str := d.val
-	pos := d.pos
+	pos := d.pos - 20
+	if pos < 0 {
+		pos = 0
+	}
 	// for i := 0; i < 5; i++ {
 	// 	if d.token == tokEOF {
 	// 		break
@@ -291,5 +304,9 @@ func (d *decoder) error(msg string) {
 	// 	d.next()
 	// 	str = str + d.val
 	// }
-	panic(fmt.Errorf("错误: %s\n位于%d, \"%s\"", msg, pos, d.src[pos:pos+50]))
+	end := int(d.pos) + 50
+	if len(d.src) < end {
+		end = len(d.src)
+	}
+	panic(fmt.Errorf("错误: %s\n位于%d, \"%s\"", msg, pos, d.src[pos:end]))
 }

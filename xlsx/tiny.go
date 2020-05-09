@@ -2,7 +2,6 @@ package xlsx
 
 import (
 	"bytes"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -47,23 +46,41 @@ func (tiny *tinyReader) SetFilterFunc(filterFunc FilterFunc) {
 }
 
 func (tiny *tinyReader) ReadAll() ([]byte, error) {
+
 	// tiny.builder.WriteString(tiny.name)
-	tiny.builder.WriteString("{")
+	tiny.builder.WriteString("{\n")
+	// isFirst := true
+	empty := true
 	for i, row := range tiny.data {
+		if len(row) < 3 || row[tiny.keyCol] == "" {
+			break
+		}
 		if tiny.filterFunc(row[tiny.filterCol], tiny.filter) {
+			empty = false
 			typ, ok := stringToCellType(row[tiny.typeCol])
 			if !ok {
 				return nil, errors.Errorf("表%s第%d行未知的数据类型:%s", tiny.name, i, row[tiny.typeCol])
 			}
+			// if !isFirst {
+			// 	tiny.builder.WriteByte(',')
+			// 	tiny.builder.WriteByte('\n')
+			// }
+			tiny.builder.WriteByte('\t')
 			// write key
 			tiny.builder.WriteString(row[tiny.keyCol])
-			tiny.builder.WriteRune('=')
+			tiny.builder.WriteString(" = ")
 			// write value
+			v := row[tiny.valueCol]
 			switch typ {
 			case cellString:
-				tiny.builder.WriteString(strconv.Quote(row[tiny.valueCol]))
+				if strings.HasPrefix(v, "Lang.") {
+					tiny.builder.WriteString(v)
+				} else {
+					tiny.builder.WriteByte('\'')
+					tiny.builder.WriteString(v)
+					tiny.builder.WriteByte('\'')
+				}
 			case cellBool:
-				v := row[tiny.valueCol]
 
 				switch strings.ToLower(v) {
 				case "0", "false", "":
@@ -72,27 +89,29 @@ func (tiny *tinyReader) ReadAll() ([]byte, error) {
 					tiny.builder.WriteString("true")
 				}
 			case cellInt:
-				v := row[tiny.valueCol]
 				if v == "" {
 					tiny.builder.WriteString("0")
 				} else {
 					tiny.builder.WriteString(v)
 				}
 			case cellFloat:
-				v := row[tiny.valueCol]
 				if v == "" {
 					tiny.builder.WriteString("0.0")
 				} else {
 					tiny.builder.WriteString(v)
 				}
 			default:
-				tiny.builder.WriteString(row[tiny.valueCol])
+				tiny.builder.WriteString(v)
 			}
-			// write end
-			tiny.builder.WriteRune(',')
+			// isFirst = false
+			tiny.builder.WriteString(",\n")
+
 		}
 	}
-	tiny.builder.WriteRune('}')
+	if empty {
+		return nil, ErrNoContent
+	}
+	tiny.builder.WriteString("}")
 
 	return tiny.builder.Bytes(), nil
 }

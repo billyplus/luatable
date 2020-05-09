@@ -14,4 +14,5 @@ require (
 	github.com/spf13/viper v1.6.3
 	github.com/stretchr/testify v1.3.0
 	github.com/tealeg/xlsx v1.0.5
+	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb
 )

@@ -1,9 +1,10 @@
 package xlsx
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	excel "github.com/tealeg/xlsx"
-	"testing"
 )
 
 var (
@@ -31,7 +32,7 @@ var (
 func TinyReaderTest(t *testing.T, name string, data [][]string, filter, want string) {
 	r := NewTinyReader("testConf", data, filter, 1, 2, 3, 4)
 	result, _ := r.ReadAll()
-	assert.Equal(t, want, result, name)
+	assert.Equal(t, want, string(result), name)
 }
 
 func TestTinyReaderForS(t *testing.T) {
@@ -46,7 +47,13 @@ func TestTinyReaderForC(t *testing.T) {
 	}
 }
 
-var tinywant = `{childId=113,type="这是一行",keep_t="{0,604800}",lmLevel=25,}`
+var tinywant = `{
+	maxLevel=100,
+	type="这是一行",
+	keep_t={0,604800},
+	lmLevel=25
+}
+`
 
 func TestTinySheet(t *testing.T) {
 	assert := assert.New(t)
@@ -59,5 +66,5 @@ func TestTinySheet(t *testing.T) {
 	r := NewTinyReader("test", data[3:], "s", 1, 2, 3, 4)
 	result, err := r.ReadAll()
 	assert.Nilf(err, "error reading content:%v", err)
-	assert.Equalf(tinywant, result, "%v 出错", "测试xlsx的tiny格式")
+	assert.Equalf(tinywant, string(result), "%v 出错", "测试xlsx的tiny格式")
 }
