@@ -282,3 +282,25 @@ func isHex(r rune) bool {
 func isOct(r rune) bool {
 	return r >= '0' && r <= '7'
 }
+
+// isSpace reports whether r is a space character.
+// space include \t \n \r ,
+func isSpace(r rune) bool {
+	return r == ' ' || r == '\t' || r == '\n' || r == ',' || r == '[' || r == ']'
+}
+
+// isAlphabet reports whether r is a alphabet character
+func isAlphabet(r rune) bool {
+	if r > unicode.MaxASCII {
+		return false
+	}
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+}
+
+// isDigit reports whether r is digit
+func isDigit(r rune) bool {
+	if r > unicode.MaxASCII {
+		return false
+	}
+	return r >= '0' && r <= '9'
+}
