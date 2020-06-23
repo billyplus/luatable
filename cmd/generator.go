@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,7 +21,6 @@ import (
 	"github.com/billyplus/luatable/xlsx"
 	"github.com/pkg/errors"
 	excel "github.com/tealeg/xlsx"
-	luaparse "github.com/yuin/gopher-lua/parse"
 )
 
 type generator struct {
@@ -53,15 +53,17 @@ func (gen *generator) PrintErrors() {
 	fmt.Printf("一共有 %d 个错误", len(gen.errors))
 	fmt.Println("-------------------------------------------")
 	fmt.Println("")
-	for _, err := range gen.errors {
+	for i, err := range gen.errors {
+		fmt.Printf("****** %d ******\n", i)
 		fmt.Println(err.Error())
-		if errs, ok := err.(stackTracer); ok {
-			st := errs.StackTrace()
-			fmt.Printf("%+v\n", st) // top two frames
-			// for _, f := range err.StackTrace() {
-			// 		fmt.Printf("%+s:%d", f)
-			// }
-		}
+		fmt.Println("")
+		// if errs, ok := err.(stackTracer); ok {
+		// 	st := errs.StackTrace()
+		// 	fmt.Printf("%v\n", st) // top two frames
+		// 	// for _, f := range err.StackTrace() {
+		// 	// 		fmt.Printf("%+s:%d", f)
+		// 	// }
+		// }
 	}
 	fmt.Println("")
 	fmt.Println("-------------------------------------------")
@@ -110,13 +112,15 @@ func (gen *generator) GenConfig(conf Config) {
 			}
 			fmt.Println("handle file:", filename)
 			if err = gen.iterateXlsx(fpath); err != nil {
-				fmt.Printf("failed to handle xlsx err: %+v", err)
-				return err
-			}
-			md5list[filename] = checksum
-			if err = saveMd5Hash(md5list, conf.MD5File); err != nil {
-				fmt.Println("failed to save md5", fpath)
-				return err
+				// fmt.Printf("failed to handle xlsx err: %+v", err)
+				gen.errors = append(gen.errors, err)
+				// return nil
+			} else {
+				md5list[filename] = checksum
+				if err = saveMd5Hash(md5list, conf.MD5File); err != nil {
+					fmt.Println("failed to save md5", fpath)
+					return err
+				}
 			}
 		}
 		return nil
@@ -368,10 +372,19 @@ func genConfig(sheet *WorkSheet, cnf ExportConfig, out string) (err error) {
 		if _, err = f.Write(result); err != nil {
 			return err
 		}
-		f.Seek(0, 0)
-		if _, err = luaparse.Parse(f, sheet.Head); err != nil {
-			return errors.Wrap(err, "parse lua")
+
+		cmd := exec.Command("lua", outfile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Println(string(out))
+			return errors.New(string(out))
+			// return errors.Wrap(err, "check lua")
 		}
+
+		// f.Seek(0, 0)
+		// if _, err = luaparse.Parse(f, sheet.Head); err != nil {
+		// 	return errors.Wrap(err, "parse lua")
+		// }
 		return nil
 	}
 	// 其它格式
