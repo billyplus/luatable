@@ -38,7 +38,11 @@ func (s *scanner) Scan() (pos Pos, tok tokType, val string) {
 	pos = s.pos(s.offset)
 	if isLetter(ch) {
 		val = s.scanIdent()
-		tok = tokIdent
+		if val == "true" || val == "false" {
+			tok = tokBool
+		} else {
+			tok = tokIdent
+		}
 	} else if isDigit(ch) {
 		tok, val = s.scanNumber(false)
 	} else {
