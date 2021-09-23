@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -77,9 +78,11 @@ func (gen *generator) GenConfig(conf Config) {
 	md5list := make(map[string]string)
 	data, err := ioutil.ReadFile(conf.MD5File)
 	if err != nil {
+		gen.errors = append(gen.errors, err)
 		return
 	}
 	if err := json.Unmarshal(data, &md5list); err != nil {
+		gen.errors = append(gen.errors, err)
 		return
 	}
 	filepath.Walk(conf.DataPath, func(path string, fileinfo os.FileInfo, err error) error {
@@ -126,6 +129,52 @@ func (gen *generator) GenConfig(conf Config) {
 		return nil
 	})
 
+	for _, out := range gen.config.Out {
+		if out.MergeJson {
+			var mergedJson bytes.Buffer
+			mergedJson.WriteByte('{')
+			filepath.Walk(out.Path, func(path string, fileinfo os.FileInfo, err error) error {
+				if err != nil {
+					return nil
+				}
+				if fileinfo.IsDir() {
+					return nil
+				}
+
+				filename := fileinfo.Name()
+				if !strings.HasSuffix(filename, ".json") {
+					return nil
+				}
+				mergedJson.WriteString("\n    \"")
+				mergedJson.WriteString(filename[:len(filename)-5])
+				mergedJson.WriteString("\": ")
+				fpath := filepath.Join(out.Path, filename)
+				data, err := ioutil.ReadFile(fpath)
+				if err != nil {
+					return err
+				}
+				if data[len(data)-1] == '\n' {
+					data = data[:len(data)-1]
+				}
+				mergedJson.Write(data)
+				mergedJson.WriteByte(',')
+				return nil
+			})
+			data := mergedJson.Bytes()
+			n := len(data)
+			if data[n-1] == ',' {
+				data = data[:n-1]
+			}
+			data = append(data, '}')
+
+			outpath := strings.Split(out.Path, "/")
+
+			err = ioutil.WriteFile("./"+outpath[len(outpath)-1]+".json", data, 0644)
+			if err != nil {
+				gen.errors = append(gen.errors, err)
+			}
+		}
+	}
 	fmt.Println("wait")
 	time.Sleep(500 * time.Microsecond)
 	return
@@ -202,26 +251,26 @@ func (gen *generator) sheetsFromXlsx(file string) error {
 			}
 			worksheet := &WorkSheet{
 				Type:     data[0][1],
-				Data:     data[4:],
+				Data:     data[2:],
 				Name:     sh,
 				FileName: filename,
 			}
-			head := data[0][4]
+			head := data[0][5]
 			head = strings.ReplaceAll(head, " ", "")
 			if strings.HasSuffix(head, "={") {
 				head = head[:len(head)-2]
 			}
 			worksheet.Head = head
 			if worksheet.Type == "base" {
-				count, err := strconv.ParseUint(data[2][1], 10, 64)
+				count, err := strconv.ParseUint(data[0][3], 10, 64)
 				if err != nil {
 					return err
 				}
 				worksheet.KeyCount = int(count)
 			}
 			for _, expConf := range gen.config.Out {
-				outfile := data[expConf.OutCellX][expConf.OutCellY]
-				if err = genConfig(worksheet, expConf, outfile); err != nil {
+				// outfile := data[expConf.OutCellX][expConf.OutCellY]
+				if err = genConfig(worksheet, expConf); err != nil {
 					return err
 				}
 			}
@@ -247,30 +296,31 @@ func (gen *generator) sheetsFromExcel360(file string) error {
 			data[7][0] = "comment"
 			worksheet := &WorkSheet{
 				Type: data[0][1],
-				Data: data[4:],
+				Data: data[2:],
 				Name: sh,
 			}
-			head := data[0][4]
+			head := data[0][5]
 			head = strings.ReplaceAll(head, " ", "")
 			if strings.HasSuffix(head, "={") {
 				head = head[:len(head)-2]
 			}
 			worksheet.Head = head
 			if worksheet.Type == "base" {
-				count, err := strconv.ParseUint(data[2][1], 10, 64)
+				count, err := strconv.ParseUint(data[0][3], 10, 64)
 				if err != nil {
 					return err
 				}
 				worksheet.KeyCount = int(count)
 			}
 			for _, expConf := range gen.config.Out {
-				outfile := data[expConf.OutCellX][expConf.OutCellY]
-				if err = genConfig(worksheet, expConf, outfile); err != nil {
+				// outfile := data[expConf.OutCellX][expConf.OutCellY]
+				if err = genConfig(worksheet, expConf); err != nil {
 					return err
 				}
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -298,18 +348,18 @@ func checkValid360Sheet(data [][]string) bool {
 
 func checkValidSheet(sheet *excel.Sheet) bool {
 	rows := sheet.MaxRow
-	if rows < 6 || len(sheet.Rows[0].Cells) < 2 {
+	if rows < 4 || len(sheet.Rows[0].Cells) < 6 {
 		return false
 	}
 
 	typ := sheet.Rows[0].Cells[1].Value
 	switch typ {
 	case "base":
-		if rows < 9 || len(sheet.Rows[1].Cells) < 2 {
+		if rows < 7 || len(sheet.Rows[0].Cells) < 6 {
 			return false
 		}
 	case "tiny":
-		if rows < 6 {
+		if rows < 4 {
 			return false
 		}
 	default:
@@ -337,11 +387,11 @@ func readerFatory(sheet *WorkSheet, filter string) xlsx.Reader {
 	}
 }
 
-func genConfig(sheet *WorkSheet, cnf ExportConfig, out string) (err error) {
+func genConfig(sheet *WorkSheet, cnf ExportConfig) (err error) {
 	fmt.Println("gen config for sheet: ", sheet.Head)
-	outfile := filepath.Join(cnf.Path, out)
+	outfile := filepath.Join(cnf.Path, sheet.Head+"."+cnf.Format)
 	// 创建目录
-	if err = os.MkdirAll(filepath.Dir(outfile), 0644); err != nil {
+	if err = os.MkdirAll(filepath.Dir(outfile), 0755); err != nil {
 		return
 	}
 	fmt.Println("success mkdirall ")

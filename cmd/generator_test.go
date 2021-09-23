@@ -11,11 +11,11 @@ func BenchmarkGenConfig(b *testing.B) {
 		DataPath: "../xlsx",
 		Out: []ExportConfig{
 			{
-				Path:     "./server",
-				Filter:   "s",
-				Format:   "lua",
-				OutCellX: 1,
-				OutCellY: 1,
+				Path:   "./server",
+				Filter: "s",
+				Format: "json",
+				// OutCellX: 1,
+				// OutCellY: 1,
 			},
 		},
 	}
@@ -32,18 +32,18 @@ func TestGenConfig(t *testing.T) {
 		DataPath: "../xlsx",
 		Out: []ExportConfig{
 			{
-				Path:     "./server",
-				Filter:   "s",
-				Format:   "lua",
-				OutCellX: 1,
-				OutCellY: 1,
+				Path:   "./server",
+				Filter: "s",
+				Format: "json",
+				// OutCellX: 1,
+				// OutCellY: 1,
 			},
 			{
-				Path:     "./client",
-				Filter:   "c",
-				Format:   "json",
-				OutCellX: 1,
-				OutCellY: 1,
+				Path:   "./client",
+				Filter: "c",
+				Format: "json",
+				// OutCellX: 1,
+				// OutCellY: 1,
 			},
 		},
 	}

@@ -6,8 +6,9 @@
     "out": [
         {
             "filter": "s",
-            "format": "lua",
-            "path": "../Server/bin/GameWorld/data/config"
+            "format": "json",
+            "path": "../Server/bin/GameWorld/data/config",
+            "mergeJson": true
         }
     ]
 }
